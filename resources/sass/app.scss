@@ -1,0 +1,228 @@
+// The following two lines import the default Sencha Touch theme. If you are building
+// a new theme, remove them and the add your own CSS on top of the base CSS (which
+// is already included in your app.json file).
+
+@import 'sencha-touch/default';
+@import 'sencha-touch/default/all';
+
+// Custom code goes here..
+
+// Examples of using the icon mixin:
+// @include icon('user');
+
+
+// Customized CSS
+
+
+// ******************************************************************
+// Simple Table
+// ******************************************************************
+
+.x-list-item .col-first {
+}
+
+.x-list-item .col-tmpl {
+    padding: 0px 8px 0px 8px;
+    float: left;
+    overflow: hidden;
+}
+
+.x-list-item .col-tmpl-right {
+    padding: 0px 8px 0px 8px;
+    overflow: hidden;
+    float: left;
+    text-align: right;
+    overflow: hidden;
+}
+
+.x-list-item .col-tmpl-border {
+    border-left: solid #5db7f5;
+}
+
+.x-list-item .col-tmpl-border-right {
+    border-right: solid #5db7f5;
+}
+
+.x-list-item .col-positive {   
+   font-weight: bold;
+}
+
+.x-list-item .col-negative {   
+   color: red !important;
+}
+
+.x-list-item  .col-60 {   
+   @extend .col-tmpl;
+   width: 60%;
+}
+
+.x-list-item .col-60-border {
+   @extend .col-60; 
+   @extend .col-tmpl-border;
+}
+
+.x-list-item .col-70 {   
+   @extend .col-tmpl;
+   width: 70%;
+}
+
+.x-list-item .col-70-border {    
+   @extend .col-70; 
+   @extend .col-tmpl-border;
+}
+
+.x-list-item  .col-10 {
+   @extend .col-tmpl;
+   width: 10%;
+}
+
+.x-list-item .col-10-border {
+   @extend .col-10; 
+   @extend .col-tmpl-border; 
+} 
+
+.x-list-item  .col-10-right {
+   @extend .col-tmpl-right;  
+   width: 10%;   
+}
+
+.x-list-item .col-10-right-border {
+   @extend .col-10-right; 
+   @extend .col-tmpl-border-right;  
+} 
+
+.x-list-item .col-20 {
+   @extend .col-tmpl;   
+   width: 20%;
+}
+
+.x-list-item .col-20-border {
+   @extend .col-20; 
+   @extend .col-tmpl-border;  
+} 
+
+.x-list-item  .col-30 {
+   @extend .col-tmpl;   
+   width: 30%;
+}
+
+.x-list-item .col-30-border {
+   @extend .col-30; 
+   @extend .col-tmpl-border;  
+} 
+
+.x-list-item .col-40 {
+   @extend .col-tmpl;   
+   width: 60%;
+}
+
+.x-list-item .col-40-border {
+   @extend .col-40; 
+   @extend .col-tmpl-border;  
+} 
+
+.x-list-item  .col-last {
+   clear:both;
+}
+
+// ******************************************************************
+// InfoView
+// ******************************************************************
+
+.fc-info-header {
+    font-weight: bold;
+    color: #115a8d;
+    margin: 8px 10px 6px 10px;
+}
+
+.fc-info-field {
+    float: left;
+    margin: 0px 10px 1px 25px;
+    color: #55b3f4;
+}
+
+.fc-info {
+    font-size: 80%;
+}
+
+.fc-info-label {
+    @extend .fc-info;
+    color: #115a8d;
+}
+
+.fc-info-value {
+    @extend .fc-info;
+     
+}
+.fc-info-container {   
+}
+
+.fc-info-last {
+   clear:both;
+   margin-bottom: 10px;
+}
+
+.fclipboard-path {
+    margin: 8px 10px 6px 10px;
+    font-size: 80%;
+    font-weight: bold;
+    color: grey;
+}
+
+
+// ******************************************************************
+// ItemList
+// ******************************************************************
+
+ItemList {    
+}
+
+// ******************************************************************
+// Log 
+// ******************************************************************
+
+.LogList {
+ font-family: "Lucida Console", Monaco, monospace;    
+ font-size: 70%;
+}
+
+.invalidField .x-form-field {
+  background-color: red !important;
+}
+
+// ******************************************************************
+// Item Info 
+// ******************************************************************
+
+.ItemInfo {
+    
+}
+
+// ******************************************************************
+// NumberInput 
+// ******************************************************************
+
+@include sencha-button-ui('numInputButtonRed', #e06b5e,'glossy');
+@include sencha-button-ui('numInputButtonBlack', #525252,'glossy');
+
+.NumInputButton {
+    margin: 2px;
+    color: #ffffff !important; 
+    font-size: 1.3em;    
+}
+
+.NumInputContainer {
+    background-color: #525252 !important;
+    padding: 8px;
+}
+
+.NumInputField {
+    font-family: "Lucida Console", Monaco, monospace;
+    text-align: right;
+    font-size: 1.3em;
+    font-weight: bold;
+}
+
+.x-item-disabled .NumInputField {
+    color: black !important;
+}

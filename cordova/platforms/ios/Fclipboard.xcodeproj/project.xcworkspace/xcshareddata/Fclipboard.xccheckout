@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>1E94B962-F059-4DA0-B659-944D68E6CC98</string>
+	<key>IDESourceControlProjectName</key>
+	<string>Fclipboard</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>50578C35162BCE52392F4C5055CA28EAF70DA938</key>
+		<string>git.funkring.net:/git/addons-funkring-extra</string>
+		<key>C8E4FB4206405E086AEE922BD41282473E695521</key>
+		<string>ssh://git.funkring.net/git/workspaces/ios</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>fclipboard/static/app/cordova/platforms/ios/Fclipboard.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>50578C35162BCE52392F4C5055CA28EAF70DA938</key>
+		<string>../../../../../../../..</string>
+		<key>C8E4FB4206405E086AEE922BD41282473E695521</key>
+		<string>../../../../../../../../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>git.funkring.net:/git/addons-funkring-extra</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>50578C35162BCE52392F4C5055CA28EAF70DA938</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>C8E4FB4206405E086AEE922BD41282473E695521</string>
+			<key>IDESourceControlWCCName</key>
+			<string></string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>50578C35162BCE52392F4C5055CA28EAF70DA938</string>
+			<key>IDESourceControlWCCName</key>
+			<string>addons-funkring-extra</string>
+		</dict>
+	</array>
+</dict>
+</plist>
