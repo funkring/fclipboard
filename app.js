@@ -19,6 +19,7 @@ Ext.application({
     ],
 
     views: [
+        'NumberView',
         'ScrollList',
         'Main',
         'FormView',       
@@ -26,6 +27,7 @@ Ext.application({
         'PartnerView',
         'ConfigView',
         'NumberInputView',
+        'SmallNumberInputView',
         'PricelistView'
         /*,
         'ListSelect',

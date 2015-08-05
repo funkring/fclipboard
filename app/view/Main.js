@@ -91,7 +91,7 @@ Ext.define('Fclipboard.view.Main', {
                     {
                         title: 'Dokumente',
                         id: 'itemTab',
-                        iconCls: 'home',     
+                        iconCls: 'home',
                         items: [{
                             docked: 'top',
                             xtype: 'toolbar',
@@ -149,6 +149,7 @@ Ext.define('Fclipboard.view.Main', {
                                     xtype: 'list',
                                     flex: 1,
                                     store: 'ItemStore',
+                                    scrollToTopOnRefresh: false,
                                     grouped: true,
                                     id: 'itemList',
                                     cls: 'ItemList',
@@ -246,8 +247,7 @@ Ext.define('Fclipboard.view.Main', {
                                 xtype: 'scrolllist',
                                 id: 'logList',
                                 height: '100%',
-                                store: 'LogStore',
-                                disableSelection:true,                            
+                                store: 'LogStore',                         
                                 cls: 'LogList',
                                 itemTpl: '{message}'                                 
                             }                
@@ -265,29 +265,54 @@ Ext.define('Fclipboard.view.Main', {
         self.callParent(config);  
                 
         var itemList = Ext.getCmp("itemList");  
-        itemList.setItemTpl(Ext.create('Ext.XTemplate', 
-                            '<tpl if="t==1">',
-                                '<div class="col-10">{code}</div>',
-                                '<div class="col-70">{name}</div>',
-                                '<div class="col-10">{uom}</div>',
-                                '<div class="col-10-right {cls}">{qty}</div>',
-                                '<div class="col-last"></div>',
-                            '<tpl else>',
-                                '{name}',
-                            '</tpl>',
-                            {
-                              apply: function(values, parent) {
-                                 // determine type
-                                 values.t = 0;
-                                 // check type
-                                 if ( values.rtype === "product_id") {
-                                     values.t = 1;
-                                     values.qty = futil.formatFloat(values.valf);
-                                     values.uom = values.valc;
-                                 }
-                                 return this.applyOut(values, [], parent).join('');
-                              }      
-                            }));
+        if ( futil.screenWidth() < 960 ) {
+            itemList.setItemTpl(Ext.create('Ext.XTemplate', 
+                                '<tpl if="t==1">',
+                                    '<div class="col-75">{code} {name} {uom}</div>',
+                                    '<div class="col-25-right {cls}">{qty}</div>',
+                                    '<div class="col-last"></div>',
+                                '<tpl else>',
+                                    '{name}',
+                                '</tpl>',
+                                {
+                                  apply: function(values, parent) {
+                                     // determine type
+                                     values.t = 0;
+                                     // check type
+                                     if ( values.rtype === "product_id") {
+                                         values.t = 1;
+                                         values.qty = futil.formatFloat(values.valf);
+                                         values.uom = values.valc;
+                                     }
+                                     return this.applyOut(values, [], parent).join('');
+                                  }      
+                                }));
+        
+        } else {
+            itemList.setItemTpl(Ext.create('Ext.XTemplate', 
+                                '<tpl if="t==1">',
+                                    '<div class="col-10">{code}</div>',
+                                    '<div class="col-70">{name}</div>',
+                                    '<div class="col-10">{uom}</div>',
+                                    '<div class="col-10-right {cls}">{qty}</div>',
+                                    '<div class="col-last"></div>',
+                                '<tpl else>',
+                                    '{name}',
+                                '</tpl>',
+                                {
+                                  apply: function(values, parent) {
+                                     // determine type
+                                     values.t = 0;
+                                     // check type
+                                     if ( values.rtype === "product_id") {
+                                         values.t = 1;
+                                         values.qty = futil.formatFloat(values.valf);
+                                         values.uom = values.valc;
+                                     }
+                                     return this.applyOut(values, [], parent).join('');
+                                  }      
+                                }));
+        }
         
          
    },

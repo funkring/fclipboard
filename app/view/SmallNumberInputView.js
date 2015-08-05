@@ -1,7 +1,7 @@
 /*global Ext:false, futil:false*/
-Ext.define('Fclipboard.view.NumberInputView', {
+Ext.define('Fclipboard.view.SmallNumberInputView', {
     extend: 'Ext.Panel',
-    xtype: 'numberinput',
+    xtype: 'smallnumberinput',
     requires: [
         'Ext.Button',
         'Ext.Container',
@@ -18,7 +18,7 @@ Ext.define('Fclipboard.view.NumberInputView', {
                 
         modal: true,
         
-        width: '336px',
+        width: "236px",
         
         listeners: [
             {
@@ -63,8 +63,9 @@ Ext.define('Fclipboard.view.NumberInputView', {
                 items: [
                     {
                         xtype: 'numberview',
+                        clsValue: 'NumberViewSmall',
                         flex: 1
-                    }                
+                    }             
                 ]      
                 
             },
@@ -79,8 +80,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                             {                                
                                 xtype: 'button',
                                 text: '7',
-                                width: '72px',
-                                height: '66px',
+                                width: '48px',
+                                height: '44px',
                                 ui: 'numInputButtonBlack',
                                 cls: 'NumInputButton',
                                 action: 'addNumber'
@@ -89,8 +90,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                             {
                                 xtype: 'button',
                                 text: '8',
-                                width: '72px',
-                                height: '66px',
+                                width: '48px',
+                                height: '44px',
                                 ui: 'numInputButtonBlack',
                                 cls: 'NumInputButton',
                                 action: 'addNumber'                                
@@ -98,8 +99,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                             {
                                 xtype: 'button',
                                 text: '9',
-                                width: '72px',
-                                height: '66px',          
+                                width: '48px',
+                                height: '44px',          
                                 ui: 'numInputButtonBlack',                      
                                 cls: 'NumInputButton',
                                 action: 'addNumber'
@@ -107,8 +108,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                             {
                                 xtype: 'button',
                                 text: 'CE',
-                                width: '80px',
-                                height: '66px',          
+                                width: '48px',
+                                height: '44px',          
                                 ui: 'numInputButtonRed',                      
                                 cls: 'NumInputButton',
                                 action: 'clearInput'
@@ -121,8 +122,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                             {                                
                                 xtype: 'button',
                                 text: '4',
-                                width: '72px',
-                                height: '66px',
+                                width: '48px',
+                                height: '44px',
                                 ui: 'numInputButtonBlack',
                                 cls: 'NumInputButton',
                                 action: 'addNumber'
@@ -130,8 +131,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                             {
                                 xtype: 'button',
                                 text: '5',
-                                width: '72px',
-                                height: '66px',
+                                width: '48px',
+                                height: '44px',
                                 ui: 'numInputButtonBlack',
                                 cls: 'NumInputButton',
                                 action: 'addNumber'
@@ -139,17 +140,17 @@ Ext.define('Fclipboard.view.NumberInputView', {
                             {
                                 xtype: 'button',
                                 text: '6',
-                                width: '72px',
-                                height: '66px',          
+                                width: '48px',
+                                height: '44px',          
                                 ui: 'numInputButtonBlack',                      
                                 cls: 'NumInputButton',
                                 action: 'addNumber'
                             }, 
                             {
                                 xtype: 'button',
-                                text: '+/-',
-                                width: '72px',
-                                height: '66px',          
+                                text: '-',
+                                width: '48px',
+                                height: '44px',          
                                 ui: 'numInputButtonBlack',                      
                                 cls: 'NumInputButton',
                                 action: 'changeSign'
@@ -168,8 +169,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                                             {                                
                                                 xtype: 'button',
                                                 text: '1',
-                                                width: '72px',
-                                                height: '66px',
+                                                width: '48px',
+                                                height: '44px',
                                                 ui: 'numInputButtonBlack',
                                                 cls: 'NumInputButton',
                                                 action: 'addNumber'
@@ -177,8 +178,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                                             {
                                                 xtype: 'button',
                                                 text: '2',
-                                                width: '72px',
-                                                height: '66px',
+                                                width: '48px',
+                                                height: '44px',
                                                 ui: 'numInputButtonBlack',
                                                 cls: 'NumInputButton',
                                                 action: 'addNumber'
@@ -186,8 +187,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                                             {
                                                 xtype: 'button',
                                                 text: '3',
-                                                width: '72px',
-                                                height: '66px',          
+                                                width: '48px',
+                                                height: '44px',          
                                                 ui: 'numInputButtonBlack',                      
                                                 cls: 'NumInputButton',
                                                 action: 'addNumber'
@@ -200,8 +201,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                                             {                                
                                                 xtype: 'button',
                                                 text: '0',
-                                                width: '148px',
-                                                height: '66px',
+                                                width: '99px',
+                                                height: '44px',
                                                 ui: 'numInputButtonBlack',
                                                 cls: 'NumInputButton',
                                                 action: 'addNumber'
@@ -209,8 +210,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                                             {
                                                 xtype: 'button',
                                                 text: '.',
-                                                width: '72px',
-                                                height: '66px',
+                                                width: '48px',
+                                                height: '44px',
                                                 ui: 'numInputButtonBlack',
                                                 cls: 'NumInputButton',
                                                 action: 'addComma'
@@ -222,8 +223,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
                             {
                                 xtype: 'button',
                                 text: '=',
-                                width: '72px',
-                                height: '136px',
+                                width: '48px',
+                                height: '91px',
                                 ui: 'numInputButtonBlack',
                                 cls: 'NumInputButton',
                                 action: 'numInputDone'
@@ -309,7 +310,7 @@ Ext.define('Fclipboard.view.NumberInputView', {
         }
     },
     
-    showBy: function(component, alignment, animation, value, callback) {
+    showBy: function(component, alignment, animation, value, info, callback) {
         var self = this;
         
         // set handler
@@ -317,7 +318,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
             value = 0.0;
         }
         
-        self.setValue(value);        
+        self.numField.setInfo(info || '');
+        self.setValue(value);                
         self.setHandler(callback);
     
         // call parent        

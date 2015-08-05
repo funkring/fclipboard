@@ -361,40 +361,61 @@ Ext.define('Fclipboard.controller.Main', {
                        var val = self.valueToString(values[item.name], item.vtype);
                        if (!val) {
                            return;
-                       }     
-                       info.infoFields.push({
-                          "label" : item.label,
-                          "value" : val 
-                       });             
+                       }   
+                       if ( !info.header ) {
+                            info.header = val;
+                       } else { 
+                           info.infoFields.push({
+                              "label" : item.label,
+                              "value" : val 
+                           });             
+                       }
                     }
                 });
                 
                 
                 if ( !self.infoTemplate ) {
-                    self.infoTemplate = new Ext.XTemplate(
-                        '<tpl if="path">',
-                            '<div class="fclipboard-path">{path}</div>',
-                        '</tpl>',
-                        '<tpl if="infoFields.length &gt; 0">',
-                            '<div class="fc-info-container">',
-                                '<tpl for="infoFields">',
-                                    '<div class="{[this.getClassHeader(xindex)]}">',
-                                        '<span class="fc-info-label">',
-                                            '{label}: ',
-                                        '</span>',
-                                        '<span class="fc-info-value">',
-                                            '{value}',
-                                        '</span>',
-                                    '</div>',                                
-                                '</tpl>',
-                                '<div class="fc-info-last"></div>',        
-                            '</div>',                
-                        '</tpl>',
-                        {
-                            getClassHeader: function(xindex) {
-                                return xindex == 1 ? "fc-info-header" : "fc-info-field";
-                            }
-                        });
+                    if ( futil.screenHeight() < 700 ) {
+                        self.infoTemplate = new Ext.XTemplate(
+                            '<tpl if="path">',
+                                '<div class="fclipboard-path">{path}</div>',
+                            '</tpl>',
+                            '<tpl if="infoFields.length &gt; 0">',
+                                '<div class="fc-info-container">',
+                                    '<tpl if="header">',
+                                        '<div class="fclipboard-path">',
+                                            '{header}',
+                                        '</div>',
+                                    '</tpl>',
+                                    '<div class="fc-info-last"></div>',        
+                                '</div>',                
+                            '</tpl>');
+                    } else {
+                        self.infoTemplate = new Ext.XTemplate(
+                            '<tpl if="path">',
+                                '<div class="fclipboard-path">{path}</div>',
+                            '</tpl>',
+                            '<tpl if="infoFields.length &gt; 0">',
+                                '<div class="fc-info-container">',
+                                    '<tpl if="header">',
+                                        '<div class="fclipboard-path">',
+                                            '{header}',
+                                        '</div>',
+                                    '</tpl>',
+                                    '<tpl for="infoFields">',
+                                        '<div class="fc-info-field">',
+                                            '<div class="fc-info-label">',
+                                                '{label}: ',
+                                            '</div>',
+                                            '<div class="fc-info-value">',
+                                                '{value}',
+                                            '</div>',
+                                        '</div>',                                
+                                    '</tpl>',
+                                    '<div class="fc-info-last"></div>',        
+                                '</div>',                
+                            '</tpl>');
+                    }
                 }
         
                 // set info            
@@ -851,7 +872,7 @@ Ext.define('Fclipboard.controller.Main', {
         //check for product selection
         if ( record.get('rtype') == "product_id" && record.get('section') == 20 ) {
             var store = Ext.getStore("ItemStore");
-            self.showNumberInput(element, record.get('valf'), function(view, newValue) {
+            self.showNumberInput(element, record.get('valf'), record.get('name'), function(view, newValue) {
                 if ( newValue !== 0.0 ) {
                     record.set('valf',newValue);                                     
                 } else {
@@ -1119,24 +1140,27 @@ Ext.define('Fclipboard.controller.Main', {
     },
     
     testNumberInput: function(c) {
-        this.showNumberInput(c, 0.0);
+        this.showNumberInput(c, 0.0, '');
     },
     
-    showNumberInput: function(nextTo, val, callback) {
+    showNumberInput: function(nextTo, val, info, callback) {
         var self = this;
-        
-        // check doubletap 
-        if ( self.isDoubleTap() ) {
-            return;
+                        
+        if ( futil.screenWidth() < 960 ) {
+            //check number view
+            if ( !self.numberInputView ) {
+                self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
+            }
+            // show
+            self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, info, callback);
+        } else {
+            //check number view
+            if ( !self.numberInputView ) {
+                self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
+            }
+            // show
+            self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, callback);
         }
-        
-        //check number view
-        if ( !self.numberInputView ) {
-            self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
-        }
-        
-        // show
-        self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, callback);
     },
     
     

@@ -6,6 +6,15 @@ var futil = {
     comma: ","
 };
 
+futil.screenWidth = function() {
+    var width = (window.innerWidth > 0) ? window.innerWidth : screen.width;
+    return width;
+};
+
+futil.screenHeight = function() {
+    var height = (window.innerHeight > 0) ? window.innerHeight : screen.height;
+    return height;
+};
 
 futil.formatFloat = function(num, digits) {    
     if ( !num) {

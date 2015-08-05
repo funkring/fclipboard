@@ -71,6 +71,11 @@
    @extend .col-tmpl-border;
 }
 
+.x-list-item .col-75 {   
+   @extend .col-tmpl;
+   width: 75%;
+}
+
 .x-list-item  .col-10 {
    @extend .col-tmpl;
    width: 10%;
@@ -90,6 +95,11 @@
    @extend .col-10-right; 
    @extend .col-tmpl-border-right;  
 } 
+
+.x-list-item  .col-25-right {
+   @extend .col-tmpl-right;  
+   width: 25%;   
+}
 
 .x-list-item .col-20 {
    @extend .col-tmpl;   
@@ -137,7 +147,8 @@
 
 .fc-info-field {
     float: left;
-    margin: 0px 10px 1px 25px;
+    margin: 2px 10px 4px 25px;
+    width:  200px;
     color: #55b3f4;
 }
 
@@ -163,7 +174,7 @@
 }
 
 .fclipboard-path {
-    margin: 8px 10px 6px 10px;
+    margin: 8px 10px 8px 10px;
     font-size: 80%;
     font-weight: bold;
     color: grey;
@@ -216,13 +227,28 @@ ItemList {
     padding: 8px;
 }
 
-.NumInputField {
+.NumberView {
     font-family: "Lucida Console", Monaco, monospace;
     text-align: right;
     font-size: 1.3em;
     font-weight: bold;
+    padding: 8px 6px 8px 6px;
+    color: #555555 !important;
 }
 
-.x-item-disabled .NumInputField {
-    color: black !important;
+.NumberViewSmall {
+    font-family: "Lucida Console", Monaco, monospace;
+    text-align: right;
+    font-size: 1.1em;
+    font-weight: bold;
+    padding: 8px 6px 8px 6px;
+    color: #555555 !important;
 }
+
+.NumberInfoView {
+    font-size: 60%;
+    padding: 6px 6px 6px 6px;
+    color: grey !important;
+    text-align: left;
+}
+

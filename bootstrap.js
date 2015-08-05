@@ -802,9 +802,11 @@ Ext.ClassManager.addNameAlternateMappings({
   "Fclipboard.view.ListSelect": [],
   "Fclipboard.view.Main": [],
   "Fclipboard.view.NumberInputView": [],
+  "Fclipboard.view.NumberView": [],
   "Fclipboard.view.PartnerView": [],
   "Fclipboard.view.PricelistView": [],
-  "Fclipboard.view.ScrollList": []
+  "Fclipboard.view.ScrollList": [],
+  "Fclipboard.view.SmallNumberInputView": []
 });
 
 Ext.ClassManager.addNameAliasMappings({
@@ -1795,6 +1797,9 @@ Ext.ClassManager.addNameAliasMappings({
   "Fclipboard.view.NumberInputView": [
     "widget.numberinput"
   ],
+  "Fclipboard.view.NumberView": [
+    "widget.numberview"
+  ],
   "Fclipboard.view.PartnerView": [
     "widget.partnerform"
   ],
@@ -1803,6 +1808,9 @@ Ext.ClassManager.addNameAliasMappings({
   ],
   "Fclipboard.view.ScrollList": [
     "widget.scrolllist"
+  ],
+  "Fclipboard.view.SmallNumberInputView": [
+    "widget.smallnumberinput"
   ]
 });
 
