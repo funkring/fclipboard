@@ -265,7 +265,7 @@ Ext.define('Fclipboard.view.Main', {
         self.callParent(config);  
                 
         var itemList = Ext.getCmp("itemList");  
-        if ( futil.screenWidth() < 960 ) {
+        if ( futil.screenWidth() < 700 ) {
             itemList.setItemTpl(Ext.create('Ext.XTemplate', 
                                 '<tpl if="t==1">',
                                     '<div class="col-75">{code} {name} {uom}</div>',

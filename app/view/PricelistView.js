@@ -69,7 +69,7 @@ Ext.define('Fclipboard.view.PricelistView', {
          
          var pricelist = Ext.getCmp("pricelist");
          
-        if ( futil.screenWidth() < 960 ) {
+        if ( futil.screenWidth() < 700 ) {
             pricelist.setItemTpl(Ext.create('Ext.XTemplate', 
                                     '<div class="col-75">{code} {name} {uom}</div>',
                                     '<div class="col-25-right {cls}">{qty}</div>',
@@ -192,8 +192,9 @@ Ext.define('Fclipboard.view.PricelistView', {
                 self.search(callback);
             };
         
+        /*
         //show number view
-        if ( futil.screenWidth() < 960 ) {
+        if ( futil.screenWidth() < 700 ) {
            if ( !self.numberInputView ) {
                 self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
            }
@@ -203,7 +204,12 @@ Ext.define('Fclipboard.view.PricelistView', {
                 self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
             }
             self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, validateNumberInput);
+        }*/
+        
+        if ( !self.numberInputView ) {
+            self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
         }
+        self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, name, validateNumberInput);
     }
   
 });

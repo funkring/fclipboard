@@ -1077,6 +1077,11 @@ Ext.define('Fclipboard.controller.Main', {
 
     sync: function() {        
         var self = this;
+        
+        //check double 
+        if ( self.isDoubleTap() ) {
+            return;
+        }
                 
         if ( !self.syncActive ) {
             self.syncActive = true;
@@ -1145,8 +1150,9 @@ Ext.define('Fclipboard.controller.Main', {
     
     showNumberInput: function(nextTo, val, info, callback) {
         var self = this;
-                        
-        if ( futil.screenWidth() < 960 ) {
+        
+        /*                
+        if ( futil.screenWidth() < 700 ) {
             //check number view
             if ( !self.numberInputView ) {
                 self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
@@ -1160,7 +1166,15 @@ Ext.define('Fclipboard.controller.Main', {
             }
             // show
             self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, callback);
+        }*/
+        
+        
+        //check number view
+        if ( !self.numberInputView ) {
+            self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
         }
+        // show
+        self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, info, callback);
     },
     
     
