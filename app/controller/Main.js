@@ -59,7 +59,8 @@ Ext.define('Fclipboard.controller.Main', {
                 initialize: 'addNotify',
                 editItem: 'editItem',
                 addProduct: 'addProduct',
-                showNumberInput: 'showNumberInput'
+                showNumberInput: 'showNumberInput',
+                push: 'stopLoading'
             },            
             partnerList: {
                 select: 'selectPartner'
@@ -86,7 +87,7 @@ Ext.define('Fclipboard.controller.Main', {
         self.partnerSearch = null;
         self.itemSearch = null;
         self.pricelist = null;
-        
+        self.doubleTap = false;
         
         self.partnerSearchTask = Ext.create('Ext.util.DelayedTask', function() {
             self.searchPartner();
@@ -184,19 +185,44 @@ Ext.define('Fclipboard.controller.Main', {
        var headerItemStore =  Ext.StoreMgr.lookup("HeaderItemStore");
        headerItemStore.load(options);
     },
-  
-    createItem: function(view) {
+    
+    startLoading: function(val) {
+        Ext.Viewport.setMasked({xtype: 'loadmask', message: val});    
+            
+    },
+    
+    stopLoading: function() {
+        Ext.Viewport.setMasked(false);
+    },
+    
+    isDoubleTap: function(val) {
         var self = this;
+        if ( !self.doubleTap ) {
+            self.doubleTap = true;
+            setTimeout(function() {
+                self.doubleTap = false;
+            },1000);
+            return false;
+        }        
+        return true;
+    },
+    
+    createItem: function() {
+        var self = this;
+        
+        // check doubletap 
+        if ( self.isDoubleTap() ) {
+            return;
+        }
+        
         var mainView = self.getMainView();
         var parentRec = mainView.getRecord();
-        
        
-         // new view
-         
+         // new view         
         var itemForm = Ext.create("Fclipboard.view.FormView",{
             title: 'Neues Dokument',        
             xtype: 'formview',       
-            scrollable: false,      
+            scrollable: false,
             saveHandler: function(view, callback) {
                 // get values
                 var values = view.getValues();
@@ -540,7 +566,7 @@ Ext.define('Fclipboard.controller.Main', {
                                         autoSelect: false,
                                         navigationView: self.getMainView(),
                                         store: 'PricelistStore',
-                                        displayField: 'name',
+                                        displayField: 'name'
                                     };
                                     vtype = "pricelist_id";
                                     values[name]=data.pricelist_id;
@@ -674,6 +700,12 @@ Ext.define('Fclipboard.controller.Main', {
     
     editPartner: function(record) {
         var self = this;       
+        
+        // check doubletap 
+        if ( self.isDoubleTap() ) {
+            return;
+        }
+        
         self.getMainView().push({
             title: 'Partner',
             xtype: 'partnerform',
@@ -713,6 +745,13 @@ Ext.define('Fclipboard.controller.Main', {
     
     saveRecord: function() {
         var self = this;
+        
+        //check double 
+        if ( self.isDoubleTap() ) {
+            return;
+        }
+        
+        
         var mainView = self.getMainView();
         var view = mainView.getActiveItem();
        
@@ -748,7 +787,11 @@ Ext.define('Fclipboard.controller.Main', {
         } catch (err) {            
         }        
         
+        self.startLoading("Dokument wird gespeichert...");
+        
         var reloadHandler = function(err, callback) {
+            self.stopLoading();
+            
             mainView.pop();
             self.loadRecord(callback);
         };
@@ -770,6 +813,12 @@ Ext.define('Fclipboard.controller.Main', {
     
     deleteRecord: function() {
         var self = this;
+        
+        // check doubletap 
+        if ( self.isDoubleTap() ) {
+            return;
+        }
+        
         var record = self.getMainView().getActiveItem().getRecord();
 
         if ( record !== null ) {
@@ -833,11 +882,10 @@ Ext.define('Fclipboard.controller.Main', {
         this.loadRecord();
     },
     
-    newItem: function() {      
+    newItem: function() {  
         var self = this;
         var mainView = self.getMainView();
         var record = mainView.getRecord();
-                     
         if ( !record || !self.pricelist ) {        
             self.createItem();
         } else {
@@ -849,7 +897,6 @@ Ext.define('Fclipboard.controller.Main', {
                 }
                 return false;
             });
-            
             if ( itemStore.getCount() === 0 ) {
                  var newItemPicker = Ext.create('Ext.Picker',{
                     doneButton: 'Erstellen',
@@ -910,6 +957,12 @@ Ext.define('Fclipboard.controller.Main', {
     
     addProduct: function() {
         var self = this;    
+        
+        // check doubletap 
+        if ( self.isDoubleTap() ) {
+            return;
+        }
+        
         var record = this.getMainView().getRecord();
         if ( self.pricelist && record) {
             var db = self.getDB();
@@ -1008,12 +1061,8 @@ Ext.define('Fclipboard.controller.Main', {
             self.syncActive = true;
         
             // start dialog
-            var mbox = Ext.Msg.show({
-                title: "Synchronisation",
-                message: "Datenabgleich mit Server",
-                buttons: []
-            });
-            
+            self.startLoading("Datenabgleich mit Server");
+                        
             // clear log
             var log = self.getLog();
             log.removeAll();
@@ -1021,7 +1070,7 @@ Ext.define('Fclipboard.controller.Main', {
             // define callback
             var callback = function(err) {
                 self.syncActive = false;
-                mbox.hide();
+                self.stopLoading();
                 
                 if (err) {
                      log.error(err);
@@ -1046,10 +1095,21 @@ Ext.define('Fclipboard.controller.Main', {
                     log.info("Hochladen auf <b>" + config.host + ":" + config.port + "</b> mit Benutzer <b>" + config.user +"</b>");
                     
                     // reload after sync
-                    PouchDBDriver.syncOdoo(config, [Ext.getStore("PartnerStore"),
-                                                    Ext.getStore("BasicItemStore"),
-                                                    Ext.getStore("PricelistStore")
-                                                   ], log, callback );
+                    PouchDBDriver.syncOdoo({
+                                             access : config,
+                                             stores: [ Ext.getStore("PartnerStore"),
+                                                       Ext.getStore("BasicItemStore"),
+                                                       Ext.getStore("PricelistStore")
+                                                     ],
+                                             actions: [
+                                                       {
+                                                          model : "fclipboard.item",
+                                                          field_id: "root_id",
+                                                          domain: [["state","!=","release"],["template","=",false]],
+                                                          action : "action_release"
+                                                       }  
+                                                     ] 
+                                            }, log, callback );
                 } else {
                     callback(err);
                 }                
@@ -1064,6 +1124,11 @@ Ext.define('Fclipboard.controller.Main', {
     
     showNumberInput: function(nextTo, val, callback) {
         var self = this;
+        
+        // check doubletap 
+        if ( self.isDoubleTap() ) {
+            return;
+        }
         
         //check number view
         if ( !self.numberInputView ) {

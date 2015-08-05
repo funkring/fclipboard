@@ -251,7 +251,7 @@ Ext.define('Ext.proxy.PouchDBDriver',{
      /**
      * sync odoo store
      */
-    syncOdooStore: function(con, db, store, syncUuid, res_model, domain, view, log, callback) {        
+    syncOdooStore: function(config, con, db, store, syncUuid, res_model, domain, view, log, callback) {        
         var syncName = syncUuid+"-{"+res_model+"}";
         if ( domain ) {
             syncName = syncName + "-{"+JSON.stringify(domain)+"}";
@@ -285,7 +285,8 @@ Ext.define('Ext.proxy.PouchDBDriver',{
                         "view": view, 
                         "fields" : fields,
                         "lastsync" : syncPoint,
-                        "changes" : changes.results || {}                        
+                        "changes" : changes.results || {},
+                        "actions" : config.actions || []                      
                        },
                        con.user_context
                      ],                       
@@ -408,16 +409,18 @@ Ext.define('Ext.proxy.PouchDBDriver',{
     /**
      * sync with odoo
      */
-    syncOdoo: function(credentials, stores, log, callback) {
+    syncOdoo: function(config, log, callback) {
          var self = this;
-         var con = openerplib.get_connection(credentials.host, 
+         //credential, stores,
+         
+         var con = openerplib.get_connection(config.access.host, 
                                             "jsonrpc", 
-                                            parseInt(credentials.port,10), 
-                                            credentials.db, 
-                                            credentials.user, 
-                                            credentials.password);
+                                            parseInt(config.access.port,10), 
+                                            config.access.db, 
+                                            config.access.user, 
+                                            config.access.password);
                            
-         var syncuuid = "odoo_sync_{"+credentials.user + "}-{" + credentials.host + "}-{" + credentials.port.toString() + "}-{" + credentials.user +"}";
+         var syncuuid = "odoo_sync_{"+config.access.user + "}-{" + config.access.host + "}-{" + config.access.port.toString() + "}-{" + config.access.user +"}";
                  
          if ( !log ) {
              log = function() {
@@ -444,7 +447,7 @@ Ext.define('Ext.proxy.PouchDBDriver',{
                     // get database                    
                     var db = self.getDB(proxy.getDatabase());
                     // sync odoo store
-                    self.syncOdooStore(con, db, store, syncuuid, res_model, domain, view, log, function(err, res) {
+                    self.syncOdooStore(config, con, db, store, syncuuid, res_model, domain, view, log, function(err, res) {
                         callback(err, res);
                     });
                 } else {                    
@@ -463,12 +466,12 @@ Ext.define('Ext.proxy.PouchDBDriver',{
                  log.info("Authentifizierung erfolgreich");       
                  
                  var storeIndex = -1;
-                 var storeLength = stores.length;
+                 var storeLength = config.stores.length;
                  
                  // handle stores
                  var storeCallback = function(err, res) {
                      if ( ++storeIndex < storeLength ) {
-                        syncStore(stores[storeIndex], storeCallback);
+                        syncStore(config.stores[storeIndex], storeCallback);
                      } else {
                         callback(err, res);                            
                      }
