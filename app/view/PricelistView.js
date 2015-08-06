@@ -52,7 +52,7 @@ Ext.define('Fclipboard.view.PricelistView', {
             grouped: true,
             listeners: {
                 itemtap: function(list, index, element, record) {
-                    Ext.getCmp('pricelistView').showNumberInput(element, record);
+                    Ext.getCmp('pricelistView').showNumberInput(element, record, index);
                 },
                 select: function(list, record) {
                     list.deselect(record);
@@ -71,7 +71,7 @@ Ext.define('Fclipboard.view.PricelistView', {
          
         if ( futil.screenWidth() < 700 ) {
             pricelist.setItemTpl(Ext.create('Ext.XTemplate', 
-                                    '<div class="col-75">{code} {name} {uom}</div>',
+                                    '<div class="col-75 {cls}">{code} {name} {uom}</div>',
                                     '<div class="col-25-right {cls}">{qty}</div>',
                                     '<div class="col-last"></div>',
                                 {
@@ -129,9 +129,6 @@ Ext.define('Fclipboard.view.PricelistView', {
          //store
          var store = Ext.getStore("PricelistItemStore");
          store.setData(self.getPricelist().products);
-
-         // search
-         self.search();
     },
     
     searchDelayed: function(searchValue) {
@@ -139,27 +136,12 @@ Ext.define('Fclipboard.view.PricelistView', {
         this.searchTask.delay(500);
     },
        
-    search: function(callback) {        
+    search: function() {        
        var self = this;
        
        var store = Ext.getStore("PricelistItemStore");
-       
-       
-       
        var searchValue = self.getSearchValue();
-       var pricelist = self.getPricelist();
-       
-       var options = {
-           params : {
-              limit: 100
-           }
-       };
-       
-       if (callback) {
-           options.scope = self;
-           options.callback = callback;
-       }
-       
+             
        if ( !Ext.isEmpty(searchValue) ) {
          store.filter([{
             property: "name",
@@ -169,12 +151,9 @@ Ext.define('Fclipboard.view.PricelistView', {
        } else {
            store.clearFilter();
        }       
-       
-       
-       store.load(options);
    },
    
-   showNumberInput: function(nextTo, record, callback) {
+   showNumberInput: function(nextTo, record, index) {
         var self = this;
         var product_id = record.get('product_id');   
         var line = self.getOrder()[product_id]; 
@@ -189,7 +168,9 @@ Ext.define('Fclipboard.view.PricelistView', {
                     category: record.get('category'),
                     sequence: record.get('sequence') 
                 };
-                self.search(callback);
+                
+                var store = Ext.getStore("PricelistItemStore");
+                store.fireEvent('updaterecord', this, record, index, index, [], {});
             };
         
         /*

@@ -88,6 +88,7 @@ Ext.define('Fclipboard.controller.Main', {
         self.itemSearch = null;
         self.pricelist = null;
         self.doubleTap = false;
+        self.reloadPartner = true;
         
         self.partnerSearchTask = Ext.create('Ext.util.DelayedTask', function() {
             self.searchPartner();
@@ -108,7 +109,7 @@ Ext.define('Fclipboard.controller.Main', {
            } else {
             self.getLog().error(err);
            } 
-           self.dataReload();
+           self.loadRoot();
         });
     },
     
@@ -149,41 +150,54 @@ Ext.define('Fclipboard.controller.Main', {
        partnerStore.load(options);
     },
     
-    searchItems: function(callback) {
+    searchItems: function() {
+       var itemStore = Ext.StoreMgr.lookup("ItemStore");
+       
+       // filter
+       if ( !Ext.isEmpty(this.itemSearch) ) {
+           itemStore.filter([{
+              property: 'name',
+              value: this.itemSearch,
+              anyMatch: true
+           }]);
+       } else {
+           itemStore.clearFilter();
+       }
+    },
+    
+    loadItems: function(callback) {
+       var self = this;
        var record = this.getMainView().getRecord();
        var domain = [['parent_id','=',record !== null ? record.getId() : null]];
-             
+       
+       // define optiones      
+       var afterLoadCallbackCount = 0;
        var options = {
            params : {
                domain : domain
+           },
+           callback: function() {
+               if ( ++afterLoadCallbackCount >= 2 ) {
+                   if (callback) {
+                        callback();
+                   }
+                   
+                   // filter if search was active
+                   if ( !Ext.isEmpty(this.itemSearch) ) {
+                       self.searchItems();
+                   }
+                }
            }
        };
-       
-       if ( callback ) {
-            // check for callback
-           var afterLoadCallbackCount = 0;
-           var afterLoadCallback = function() {
-               if ( ++afterLoadCallbackCount >= 2 ) {
-                   callback();
-               }
-           };
-           options.callback=afterLoadCallback;
-       }
-              
-       if ( !Ext.isEmpty(this.itemSearch) ) {
-           options.filters = [{
-              property: 'name',
-              value: this.itemSearch   
-           }];
-       }
-       
-       // load data
-       var itemStore = Ext.StoreMgr.lookup("ItemStore");
-       itemStore.load(options);
        
        // load header item
        var headerItemStore =  Ext.StoreMgr.lookup("HeaderItemStore");
        headerItemStore.load(options);
+             
+       // load items
+       var itemStore = Ext.StoreMgr.lookup("ItemStore");
+       itemStore.load(options);
+     
     },
     
     startLoading: function(val) {
@@ -240,15 +254,14 @@ Ext.define('Fclipboard.controller.Main', {
                 db.post(values, function(err, res) {
                     if( !err ) {
                        if ( template_id ) {
-                           // clone template
-                           var mbox = Ext.Msg.show({
-                                title: "Neues Dokument",
-                                message: "Erstelle Struktur...",
-                                buttons: []
-                           });
+                           //
+                           self.startLoading("Erstelle Struktur");
+                           //                           
                            var newDocId = res.id;
                            PouchDBDriver.deepCopy(db, res.id, template_id, "parent_id", {template:false}, function(err,res) {
-                              mbox.hide();
+                              //
+                              self.stopLoading();
+                              //                            
                               if (!err && template_id) {
                                 // open view if template was defined
                                 callback(err,function() {
@@ -292,8 +305,9 @@ Ext.define('Fclipboard.controller.Main', {
     },
     
     loadRoot: function(callback) {
-        this.getMainView().setRecord(null);
-        this.loadRecord(callback);
+        this.getMainView().setRecord(null);        
+        this.reloadPartner = true;
+        this.loadRecord(callback);        
     },
     
     valueToString: function(val, vtype) {
@@ -429,34 +443,36 @@ Ext.define('Fclipboard.controller.Main', {
         };
                 
         // check for callback
-        var afterLoadCallbackCount = 0;
         var afterLoadCallback = function() {
-            if ( ++afterLoadCallbackCount == 2 ) {                
-                if ( record ) {
-                    // search pricelist
-                    PouchDBDriver.findFirstChild(self.getDB(), record.getId(), "parent_id", [["rtype","=","pricelist_id"]], function(err, doc) {
-                       // check error or no pricelist found
-                       if ( err || !doc || !doc.pricelist_id ) {  
+            if ( record ) {
+                // search pricelist
+                PouchDBDriver.findFirstChild(self.getDB(), record.getId(), "parent_id", [["rtype","=","pricelist_id"]], function(err, doc) {
+                   // check error or no pricelist found
+                   if ( err || !doc || !doc.pricelist_id ) {  
+                      handleCallback(err);
+                   } else {
+                      db.get(doc.pricelist_id, function(err, pricelist) {
+                          // set pricelist
+                          self.pricelist = !err && pricelist || null;                                                            
                           handleCallback(err);
-                       } else {
-                          db.get(doc.pricelist_id, function(err, pricelist) {
-                              // set pricelist
-                              self.pricelist = !err && pricelist || null;                                                            
-                              handleCallback(err);
-                          });
-                       } 
-                    });
-                
-                // if no record search no pricelist
-                } else {
-                   handleCallback();
-                }
+                      });
+                   } 
+                });
+            
+            // if no record search no pricelist
+            } else {
+               handleCallback();
             }
         };
         
         // load data
-        self.searchItems(afterLoadCallback);
-        self.searchPartner(afterLoadCallback);       
+        self.loadItems(afterLoadCallback);       
+        
+        // check reload partner flag
+        if ( this.reloadPartner ) {
+            this.reloadPartner = false;
+            this.searchPartner();
+        }
     },
     
     editCurrentItem: function() {
@@ -714,13 +730,15 @@ Ext.define('Fclipboard.controller.Main', {
         self.loadHeaderValues(record, showView); 
     },
         
-    newPartner: function() {        
-        var newPartner = Ext.create('Fclipboard.model.Partner',{});       
+    newPartner: function() {
+        this.reloadPartner = true;        
+        var newPartner = Ext.create('Fclipboard.model.Partner',{});
         this.editPartner(newPartner);
     },
     
     editPartner: function(record) {
-        var self = this;       
+        var self = this;  
+        self.reloadPartner = true;     
         
         // check doubletap 
         if ( self.isDoubleTap() ) {
@@ -912,13 +930,15 @@ Ext.define('Fclipboard.controller.Main', {
         } else {
         
             var itemStore = Ext.getStore("ItemStore");
-            var productItems = itemStore.queryBy(function(record) {
-                if ( record.get('rtype') == "product_id") {
-                    return true;
+            var productItems = [];
+            
+            Ext.each(itemStore.data.all,function(item)  {
+                if ( item.get('rtype') == 'product_id') {
+                    productItems.push(item);
                 }
-                return false;
             });
-            if ( itemStore.getCount() === 0 ) {
+          
+            if ( itemStore.data.all.length === 0 ) {
                  var newItemPicker = Ext.create('Ext.Picker',{
                     doneButton: 'Erstellen',
                     cancelButton: 'Abbrechen',
@@ -977,25 +997,111 @@ Ext.define('Fclipboard.controller.Main', {
     },
     
     addProduct: function() {
-        var self = this;    
+        var self = this;
         
         // check doubletap 
         if ( self.isDoubleTap() ) {
             return;
         }
+            
+        self.startLoading("Lade Preisliste");
         
         var record = this.getMainView().getRecord();
         if ( self.pricelist && record) {
             var db = self.getDB();
             
+            // order 
+            var order = {};
+            var orderItems = {};
+            
+            //show pricelist view
+            var showPriceListView = function() {
+                 var view = Ext.create("Fclipboard.view.PricelistView", {
+
+                       title: self.pricelist.name,
+                       pricelist: self.pricelist,
+                       order: order,
+                                              
+                       saveHandler: function(view, callback) {
+                          var update = [];
+                          var newOrder = view.getOrder();
+                          // update create new                     
+                          Ext.iterate(newOrder, function(product_id, line) {                                    
+                                if ( product_id in orderItems ) {
+                                    var doc = orderItems[product_id];
+                                    if ( doc.valf !== line.qty || doc.name !== line.name ) {
+                                        if ( line.qty === 0.0 ) {
+                                            // delete
+                                            update.push({
+                                                _id : doc._id,
+                                                _rev : doc._rev,
+                                                _deleted : true
+                                            });   
+                                        } else {
+                                            doc.name=line.name;
+                                            doc.valf=line.qty;
+                                            doc.code=line.code;
+                                            doc.valc=line.uom;  
+                                            doc.sequence=line.sequence; 
+                                            doc.group=line.category;                                             
+                                            update.push(doc);
+                                        }
+                                    }
+                                } else if ( line.qty !== 0.0 ) {
+                                    update.push({
+                                        fdoo__ir_model : "fclipboard.item",
+                                        product_id : product_id,
+                                        name : line.name,  
+                                        parent_id : record.getId(),
+                                        section : 20,
+                                        rtype : "product_id",
+                                        dtype : "f",
+                                        valf : line.qty,
+                                        code : line.code,
+                                        valc : line.uom,
+                                        sequence : line.sequence,
+                                        group : line.category                                           
+                                     });
+                                }
+                          });
+                          
+                          // update and do callback
+                          db.bulkDocs(update, function(err, res) {
+                              callback(err);
+                          });
+                           
+                       }
+                   });
+                       
+                self.getMainView().push(view);   
+            };
+            
+            
             // search current items
+            var store = Ext.getStore("ItemStore");
+            Ext.each(store.data.all, function(item) {
+                    var doc = item.raw;
+                    //create order line
+                    order[doc.product_id]={
+                        name : item.get('name'),
+                        qty : item.get('valf'),
+                        uom : item.get('valc'),
+                        code : item.get('code'),
+                        product_id : item.get('product_id'),
+                        sequence: item.get('sequence'),
+                        category: item.get('group')
+                    };                    
+                    orderItems[doc.product_id]=doc;
+            }); 
+         
+            showPriceListView();
+             
+            /** reload order items   
             PouchDBDriver.search(db, [["parent_id","=",record.getId()],["section","=",20],["rtype","=","product_id"]], {'include_docs':true}, function(err, result) {
                 if ( err ) {
                     return;
                 } 
-                
-                var order = {};
-                var orderItems = {};
+               
                 Ext.each(result.rows, function(row) {
                     var doc = row.doc;
                     //create order line
@@ -1010,67 +1116,9 @@ Ext.define('Fclipboard.controller.Main', {
                     };                    
                     orderItems[doc.product_id]=doc;
                 });
-                
-                var view = Ext.create("Fclipboard.view.PricelistView", {
-
-                           title: self.pricelist.name,
-                           pricelist: self.pricelist,
-                           order: order,
-                            
-                           saveHandler: function(view, callback) {
-                              var update = [];
-                              var newOrder = view.getOrder();
-                              // update create new                     
-                              Ext.iterate(newOrder, function(product_id, line) {                                    
-                                    if ( product_id in orderItems ) {
-                                        var doc = orderItems[product_id];
-                                        if ( doc.valf !== line.qty || doc.name !== line.name ) {
-                                            if ( line.qty === 0.0 ) {
-                                                // delete
-                                                update.push({
-                                                    _id : doc._id,
-                                                    _rev : doc._rev,
-                                                    _deleted : true
-                                                });   
-                                            } else {
-                                                doc.name=line.name;
-                                                doc.valf=line.qty;
-                                                doc.code=line.code;
-                                                doc.valc=line.uom;  
-                                                doc.sequence=line.sequence; 
-                                                doc.group=line.category;                                             
-                                                update.push(doc);
-                                            }
-                                        }
-                                    } else if ( line.qty !== 0.0 ) {
-                                        update.push({
-                                            fdoo__ir_model : "fclipboard.item",
-                                            product_id : product_id,
-                                            name : line.name,  
-                                            parent_id : record.getId(),
-                                            section : 20,
-                                            rtype : "product_id",
-                                            dtype : "f",
-                                            valf : line.qty,
-                                            code : line.code,
-                                            valc : line.uom,
-                                            sequence : line.sequence,
-                                            group : line.category                                           
-                                         });
-                                    }
-                              });
-                              
-                              // update and do callback
-                              db.bulkDocs(update, function(err, res) {
-                                  callback(err);
-                              });
                                
-                           }
-                       });
-                       
-                self.getMainView().push(view);       
-                
-            });
+                showPriceListView();
+            });*/
              
         }
     },

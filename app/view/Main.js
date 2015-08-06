@@ -39,7 +39,7 @@ Ext.define('Fclipboard.view.Main', {
                 {
                     xtype: 'button',
                     id: 'saveViewButton',
-                    text: 'OK',                                  
+                    text: 'Speichern',                                  
                     align: 'right',
                     action: 'saveView',
                     hidden: true                
