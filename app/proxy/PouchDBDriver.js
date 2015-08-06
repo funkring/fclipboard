@@ -459,19 +459,24 @@ Ext.define('Ext.proxy.PouchDBDriver',{
          // start sync                    
          con.authenticate( function(err)  {
              if (err) {
-                 log.error(err);
+                 callback(err);
              } else {
                  log.info("Authentifizierung erfolgreich");       
                  
                  var storeIndex = -1;
                  var storeLength = config.stores.length;
+                 var lastError = null;
                  
                  // handle stores
                  var storeCallback = function(err, res) {
+                     if (err) {
+                         lastError = err;
+                     }
+                                      
                      if ( ++storeIndex < storeLength ) {
                         syncStore(config.stores[storeIndex], storeCallback);
                      } else {
-                        callback(err, res);                            
+                        callback(lastError, res);                            
                      }
                  };
                  

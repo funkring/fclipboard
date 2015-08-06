@@ -7,7 +7,7 @@ Ext.define('Fclipboard.store.LogStore', {
             { name: "message", type:"string" },
             { name: "prio", type:"int" }
         ],
-        data: []       
+        data: []
     },
     
     info: function(message) {
@@ -19,13 +19,13 @@ Ext.define('Fclipboard.store.LogStore', {
     error: function(message) {
         var self = this;
         this.add({"message": self.extract(message),
-                  "prio" : 2});
+                  "prio" : 3});
     },
     
     warning: function(message) {
         var self = this;
         this.add({"message": self.extract(message),
-                  "prio" : 3});
+                  "prio" : 2});
     },    
     
     extract: function(message) {   

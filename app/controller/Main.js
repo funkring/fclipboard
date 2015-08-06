@@ -1143,8 +1143,14 @@ Ext.define('Fclipboard.controller.Main', {
                 self.stopLoading();
                 
                 if (err) {
-                     log.error(err);
-                     log.warning("<b>Synchronisation mit Fehlern abgeschlossen!</b>");
+                    if ( err === 'Timeout') {
+                        log.error("Zeitüberschreitung bei Verbindung zu Server");
+                    } else if ( err == 'Offline' ) {
+                        log.error("Es kann keine Verbindung zum Server hergestellt werden");
+                    } else {
+                        log.error(err);                        
+                    }
+                    log.warning("<b>Synchronisation mit Fehlern abgeschlossen!</b>");
                 } else {
                      log.info("<b>Synchronisation beendet!</b>");
                 }

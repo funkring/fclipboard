@@ -29,17 +29,25 @@ openerplib.json_rpc = function(url, fct, params, callback) {
 
         var contentType = req.getResponseHeader('Content-Type');
         if (req.status !== 200) {
-            callback(null,'Expected HTTP response "200 OK", found "' + req.status + ' ' + req.statusText + '"');
+            callback('Offline', null);
+            //callback('Expected HTTP response "200 OK", found "' + req.status + ' ' + req.statusText + '"', null);
         } else if (contentType.indexOf('application/json') !== 0) {
-            callback(null, 'Expected JSON encoded response, found "' + contentType + '"');
+            callback('Expected JSON encoded response, found "' + contentType + '"', null);
         } else {
             var result = JSON.parse(this.responseText);
             callback(result.error || null, result.result || null);
         }
     };
+    req.ontimeout = function() {
+         callback("Timeout",null);
+    };
 
     // send request
-    req.send(JSON.stringify(data));
+    try {
+        req.send(JSON.stringify(data));
+    } catch(err) {
+        callback(err,null);
+    }
 };
 
 openerplib.Service = function(con, service) {

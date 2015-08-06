@@ -249,7 +249,15 @@ Ext.define('Fclipboard.view.Main', {
                                 height: '100%',
                                 store: 'LogStore',                         
                                 cls: 'LogList',
-                                itemTpl: '{message}'                                 
+                                itemTpl: Ext.create('Ext.XTemplate', 
+                                            '<tpl switch="prio">',
+                                            '<tpl case="2">',
+                                                '<span style="color:orange;">{message}</span>',                                                
+                                            '<tpl case="3">',
+                                                '<span style="color:red;">{message}</span>',
+                                            '<tpl default>',
+                                                '{message}',
+                                            '</tpl>')                               
                             }                
                         ]
                         
