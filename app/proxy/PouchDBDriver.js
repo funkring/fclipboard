@@ -304,13 +304,11 @@ Ext.define('Ext.proxy.PouchDBDriver',{
                              var docInserted = 0;
                                                           
                              var serverChangeDone = function(err) {
-                                pending_server_changes--;
-                                
                                 if ( err ) {
                                     log.warning(err);
                                 }
                                 
-                                if ( !pending_server_changes ) {
+                                if ( --pending_server_changes === 0) {
                                     // update sync data                                   
                                     db.info().then(function(res) {
                                         server_lastsync.seq = res.update_seq;

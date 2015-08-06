@@ -64,10 +64,10 @@ Ext.define('Fclipboard.view.PricelistView', {
     },
               
     initialize: function() {
-         var self = this;
-         self.callParent(arguments);
+        var self = this;
+        self.callParent(arguments);
          
-         var pricelist = Ext.getCmp("pricelist");
+        var pricelist = Ext.getCmp("pricelist");
          
         if ( futil.screenWidth() < 700 ) {
             pricelist.setItemTpl(Ext.create('Ext.XTemplate', 
@@ -126,10 +126,19 @@ Ext.define('Fclipboard.view.PricelistView', {
              self.search();
          });
          
-         //store
-         var store = Ext.getStore("PricelistItemStore");
-         store.setData(self.getPricelist().products);
+       
     },
+    
+    updatePricelist: function(priceList) {
+        //store
+        var store = Ext.getStore("PricelistItemStore");
+        if ( priceList ) {
+            store.setData(priceList.products);
+        } else {
+            store.setData([]);
+        }
+    },
+    
     
     searchDelayed: function(searchValue) {
         this.setSearchValue(searchValue);
