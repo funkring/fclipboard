@@ -67867,7 +67867,7 @@ Ext.define('Ext.picker.Picker', {
     /**
      * sync odoo store
      */
-    syncOdooStore: function(con, db, store, syncUuid, res_model, domain, view, log, callback) {
+    syncOdooStore: function(config, con, db, store, syncUuid, res_model, domain, view, log, callback) {
         var syncName = syncUuid + "-{" + res_model + "}";
         if (domain) {
             syncName = syncName + "-{" + JSON.stringify(domain) + "}";
@@ -67894,7 +67894,8 @@ Ext.define('Ext.picker.Picker', {
                             "view": view,
                             "fields": fields,
                             "lastsync": syncPoint,
-                            "changes": changes.results || {}
+                            "changes": changes.results || {},
+                            "actions": config.actions || []
                         },
                         con.user_context
                     ], null, function(err, res) {
@@ -67908,11 +67909,10 @@ Ext.define('Ext.picker.Picker', {
                             var docUpdated = 0;
                             var docInserted = 0;
                             var serverChangeDone = function(err) {
-                                    pending_server_changes--;
                                     if (err) {
                                         log.warning(err);
                                     }
-                                    if (!pending_server_changes) {
+                                    if (--pending_server_changes === 0) {
                                         // update sync data                                   
                                         db.info().then(function(res) {
                                             server_lastsync.seq = res.update_seq;
@@ -67994,10 +67994,11 @@ Ext.define('Ext.picker.Picker', {
     /**
      * sync with odoo
      */
-    syncOdoo: function(credentials, stores, log, callback) {
+    syncOdoo: function(config, log, callback) {
         var self = this;
-        var con = openerplib.get_connection(credentials.host, "jsonrpc", parseInt(credentials.port, 10), credentials.db, credentials.user, credentials.password);
-        var syncuuid = "odoo_sync_{" + credentials.user + "}-{" + credentials.host + "}-{" + credentials.port.toString() + "}-{" + credentials.user + "}";
+        //credential, stores,
+        var con = openerplib.get_connection(config.access.host, "jsonrpc", parseInt(config.access.port, 10), config.access.db, config.access.user, config.access.password);
+        var syncuuid = "odoo_sync_{" + config.access.user + "}-{" + config.access.host + "}-{" + config.access.port.toString() + "}-{" + config.access.user + "}";
         if (!log) {
             log = function() {
                 this.log = function(message) {
@@ -68022,7 +68023,7 @@ Ext.define('Ext.picker.Picker', {
                         // get database                    
                         var db = self.getDB(proxy.getDatabase());
                         // sync odoo store
-                        self.syncOdooStore(con, db, store, syncuuid, res_model, domain, view, log, function(err, res) {
+                        self.syncOdooStore(config, con, db, store, syncuuid, res_model, domain, view, log, function(err, res) {
                             callback(err, res);
                         });
                     } else {
@@ -68034,17 +68035,21 @@ Ext.define('Ext.picker.Picker', {
         // start sync                    
         con.authenticate(function(err) {
             if (err) {
-                log.error(err);
+                callback(err);
             } else {
                 log.info("Authentifizierung erfolgreich");
                 var storeIndex = -1;
-                var storeLength = stores.length;
+                var storeLength = config.stores.length;
+                var lastError = null;
                 // handle stores
                 var storeCallback = function(err, res) {
+                        if (err) {
+                            lastError = err;
+                        }
                         if (++storeIndex < storeLength) {
-                            syncStore(stores[storeIndex], storeCallback);
+                            syncStore(config.stores[storeIndex], storeCallback);
                         } else {
-                            callback(err, res);
+                            callback(lastError, res);
                         }
                     };
                 storeCallback();
@@ -68870,14 +68875,14 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         var self = this;
         this.add({
             "message": self.extract(message),
-            "prio": 2
+            "prio": 3
         });
     },
     warning: function(message) {
         var self = this;
         this.add({
             "message": self.extract(message),
-            "prio": 3
+            "prio": 2
         });
     },
     extract: function(message) {
@@ -68989,7 +68994,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 {
                     xtype: 'button',
                     id: 'saveViewButton',
-                    text: 'OK',
+                    text: 'Speichern',
                     align: 'right',
                     action: 'saveView',
                     hidden: true
@@ -69091,6 +69096,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                                         xtype: 'list',
                                         flex: 1,
                                         store: 'ItemStore',
+                                        scrollToTopOnRefresh: false,
                                         grouped: true,
                                         id: 'itemList',
                                         cls: 'ItemList',
@@ -69191,9 +69197,8 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                                 id: 'logList',
                                 height: '100%',
                                 store: 'LogStore',
-                                disableSelection: true,
                                 cls: 'LogList',
-                                itemTpl: '{message}'
+                                itemTpl: Ext.create('Ext.XTemplate', '<tpl switch="prio">', '<tpl case="2">', '<span style="color:orange;">{message}</span>', '<tpl case="3">', '<span style="color:red;">{message}</span>', '<tpl default>', '{message}', '</tpl>')
                             }
                         ]
                     }
@@ -69206,19 +69211,35 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         var self = this;
         self.callParent(config);
         var itemList = Ext.getCmp("itemList");
-        itemList.setItemTpl(Ext.create('Ext.XTemplate', '<tpl if="t==1">', '<div class="col-10">{code}</div>', '<div class="col-70">{name}</div>', '<div class="col-10">{uom}</div>', '<div class="col-10-right {cls}">{qty}</div>', '<div class="col-last"></div>', '<tpl else>', '{name}', '</tpl>', {
-            apply: function(values, parent) {
-                // determine type
-                values.t = 0;
-                // check type
-                if (values.rtype === "product_id") {
-                    values.t = 1;
-                    values.qty = futil.formatFloat(values.valf);
-                    values.uom = values.valc;
+        if (futil.screenWidth() < 700) {
+            itemList.setItemTpl(Ext.create('Ext.XTemplate', '<tpl if="t==1">', '<div class="col-75">{code} {name} {uom}</div>', '<div class="col-25-right {cls}">{qty}</div>', '<div class="col-last"></div>', '<tpl else>', '{name}', '</tpl>', {
+                apply: function(values, parent) {
+                    // determine type
+                    values.t = 0;
+                    // check type
+                    if (values.rtype === "product_id") {
+                        values.t = 1;
+                        values.qty = futil.formatFloat(values.valf);
+                        values.uom = values.valc;
+                    }
+                    return this.applyOut(values, [], parent).join('');
                 }
-                return this.applyOut(values, [], parent).join('');
-            }
-        }));
+            }));
+        } else {
+            itemList.setItemTpl(Ext.create('Ext.XTemplate', '<tpl if="t==1">', '<div class="col-10">{code}</div>', '<div class="col-70">{name}</div>', '<div class="col-10">{uom}</div>', '<div class="col-10-right {cls}">{qty}</div>', '<div class="col-last"></div>', '<tpl else>', '{name}', '</tpl>', {
+                apply: function(values, parent) {
+                    // determine type
+                    values.t = 0;
+                    // check type
+                    if (values.rtype === "product_id") {
+                        values.t = 1;
+                        values.qty = futil.formatFloat(values.valf);
+                        values.uom = values.valc;
+                    }
+                    return this.applyOut(values, [], parent).join('');
+                }
+            }));
+        }
     },
     validateComponents: function() {
         var self = this;
@@ -69276,6 +69297,47 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     'Main'
 ], 0));
 
+/*global Ext:false*, Fclipboard:false, futil*/
+(Ext.cmd.derive('Fclipboard.view.NumberView', Ext.Container, {
+    cls: 'NumberView',
+    config: {
+        value: null,
+        clsValue: 'NumberView',
+        info: null,
+        clsInfo: 'NumberInfoView'
+    },
+    updateView: function() {
+        var numText = this.getValue() || '';
+        var infoText = this.getInfo();
+        var html = '<div class="' + this.getClsValue() + '">' + numText + '</div>';
+        if (infoText) {
+            html += '<div class="' + this.getClsInfo() + '">' + infoText + '</div>';
+        }
+        this.setHtml(html);
+    },
+    updateValue: function(value) {
+        this.updateView();
+    },
+    updateInfo: function(info) {
+        this.updateView();
+    }
+}, 0, [
+    "numberview"
+], [
+    "component",
+    "container",
+    "numberview"
+], {
+    "component": true,
+    "container": true,
+    "numberview": true
+}, [
+    "widget.numberview"
+], 0, [
+    Fclipboard.view,
+    'NumberView'
+], 0));
+
 /*global Ext:false, futil:false*/
 (Ext.cmd.derive('Fclipboard.view.NumberInputView', Ext.Panel, {
     config: {
@@ -69284,6 +69346,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         handler: null,
         hideOnMaskTap: true,
         modal: true,
+        width: '336px',
         listeners: [
             {
                 fn: 'addNumber',
@@ -69325,13 +69388,8 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 layout: 'hbox',
                 items: [
                     {
-                        xtype: 'textfield',
-                        name: 'numval',
-                        disabled: true,
-                        flex: 1,
-                        component: {
-                            cls: 'NumInputField'
-                        }
+                        xtype: 'numberview',
+                        flex: 1
                     }
                 ]
             },
@@ -69504,7 +69562,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         var self = this;
         self.callParent(arguments);
         // get num field
-        self.numField = self.query('textfield[name=numval]')[0];
+        self.numField = self.query('numberview')[0];
     },
     addComma: function() {
         var val = this.numField.getValue();
@@ -69632,10 +69690,11 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 id: 'pricelist',
                 store: 'PricelistItemStore',
                 cls: 'PriceListItem',
+                scrollToTopOnRefresh: false,
                 grouped: true,
                 listeners: {
                     itemtap: function(list, index, element, record) {
-                        Ext.getCmp('pricelistView').showNumberInput(element, record);
+                        Ext.getCmp('pricelistView').showNumberInput(element, record, index);
                     },
                     select: function(list, record) {
                         list.deselect(record);
@@ -69648,31 +69707,54 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         var self = this;
         self.callParent(arguments);
         var pricelist = Ext.getCmp("pricelist");
-        pricelist.setItemTpl(Ext.create('Ext.XTemplate', '<div class="col-10 {cls}">{code}</div>', '<div class="col-70 {cls}">{name}</div>', '<div class="col-10 {cls}">{uom}</div>', '<div class="col-10-right {cls}">{qty}</div>', '<div class="col-last {cls}"></div>', {
-            apply: function(values, parent) {
-                var line = self.getOrder()[values.product_id];
-                var qty = 0;
-                if (line) {
-                    qty = line.qty;
+        if (futil.screenWidth() < 700) {
+            pricelist.setItemTpl(Ext.create('Ext.XTemplate', '<div class="col-75 {cls}">{code} {name} {uom}</div>', '<div class="col-25-right {cls}">{qty}</div>', '<div class="col-last"></div>', {
+                apply: function(values, parent) {
+                    var line = self.getOrder()[values.product_id];
+                    var qty = 0;
+                    if (line) {
+                        qty = line.qty;
+                    }
+                    var cls = '';
+                    if (qty > 0) {
+                        cls = ' col-positive';
+                    }
+                    values.cls = cls;
+                    values.qty = futil.formatFloat(qty);
+                    return this.applyOut(values, [], parent).join('');
                 }
-                var cls = '';
-                if (qty > 0) {
-                    cls = ' col-positive';
+            }));
+        } else {
+            pricelist.setItemTpl(Ext.create('Ext.XTemplate', '<div class="col-10 {cls}">{code}</div>', '<div class="col-70 {cls}">{name}</div>', '<div class="col-10 {cls}">{uom}</div>', '<div class="col-10-right {cls}">{qty}</div>', '<div class="col-last {cls}"></div>', {
+                apply: function(values, parent) {
+                    var line = self.getOrder()[values.product_id];
+                    var qty = 0;
+                    if (line) {
+                        qty = line.qty;
+                    }
+                    var cls = '';
+                    if (qty > 0) {
+                        cls = ' col-positive';
+                    }
+                    values.cls = cls;
+                    values.qty = futil.formatFloat(qty);
+                    return this.applyOut(values, [], parent).join('');
                 }
-                values.cls = cls;
-                values.qty = futil.formatFloat(qty);
-                return this.applyOut(values, [], parent).join('');
-            }
-        }));
+            }));
+        }
         //
         self.searchTask = Ext.create('Ext.util.DelayedTask', function() {
             self.search();
         });
+    },
+    updatePricelist: function(priceList) {
         //store
         var store = Ext.getStore("PricelistItemStore");
-        store.setData(self.getPricelist().products);
-        // search
-        self.search();
+        if (priceList) {
+            store.setData(priceList.products);
+        } else {
+            store.setData([]);
+        }
     },
     searchDelayed: function(searchValue) {
         this.setSearchValue(searchValue);
@@ -69682,12 +69764,6 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         var self = this;
         var store = Ext.getStore("PricelistItemStore");
         var searchValue = self.getSearchValue();
-        var pricelist = self.getPricelist();
-        var options = {
-                params: {
-                    limit: 100
-                }
-            };
         if (!Ext.isEmpty(searchValue)) {
             store.filter([
                 {
@@ -69699,28 +69775,42 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         } else {
             store.clearFilter();
         }
-        store.load(options);
     },
-    showNumberInput: function(nextTo, record) {
+    showNumberInput: function(nextTo, record, index) {
         var self = this;
         var product_id = record.get('product_id');
         var line = self.getOrder()[product_id];
-        //check number view
-        if (!self.numberInputView) {
-            self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
-        }
-        // show
-        self.numberInputView.showBy(nextTo, 'tl-tr?', false, line && line.qty || 0, function(numInput, newVal) {
-            self.getOrder()[product_id] = {
-                name: record.get('name'),
-                qty: newVal,
-                uom: record.get('uom'),
-                code: record.get('code'),
-                category: record.get('category'),
-                sequence: record.get('sequence')
+        var qty = line && line.qty || 0;
+        var name = record.get('name');
+        var validateNumberInput = function(numInput, newVal) {
+                self.getOrder()[product_id] = {
+                    name: record.get('name'),
+                    qty: newVal,
+                    uom: record.get('uom'),
+                    code: record.get('code'),
+                    category: record.get('category'),
+                    sequence: record.get('sequence')
+                };
+                var store = Ext.getStore("PricelistItemStore");
+                store.fireEvent('updaterecord', this, record, index, index, [], {});
             };
-            self.search();
-        });
+        /*
+        //show number view
+        if ( futil.screenWidth() < 700 ) {
+           if ( !self.numberInputView ) {
+                self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
+           }
+           self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, name, validateNumberInput);
+        } else {
+            if ( !self.numberInputView ) {
+                self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
+            }
+            self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, validateNumberInput);
+        }*/
+        if (!self.numberInputView) {
+            self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
+        }
+        self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, name, validateNumberInput);
     }
 }, 0, [
     "pricelist"
@@ -70060,7 +70150,8 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 initialize: 'addNotify',
                 editItem: 'editItem',
                 addProduct: 'addProduct',
-                showNumberInput: 'showNumberInput'
+                showNumberInput: 'showNumberInput',
+                push: 'stopLoading'
             },
             partnerList: {
                 select: 'selectPartner'
@@ -70086,6 +70177,8 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         self.partnerSearch = null;
         self.itemSearch = null;
         self.pricelist = null;
+        self.doubleTap = false;
+        self.reloadPartner = true;
         self.partnerSearchTask = Ext.create('Ext.util.DelayedTask', function() {
             self.searchPartner();
         });
@@ -70102,7 +70195,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             } else {
                 self.getLog().error(err);
             }
-            self.dataReload();
+            self.loadRoot();
         });
     },
     searchDelayed: function(task) {
@@ -70136,7 +70229,23 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         }
         partnerStore.load(options);
     },
-    searchItems: function(callback) {
+    searchItems: function() {
+        var itemStore = Ext.StoreMgr.lookup("ItemStore");
+        // filter
+        if (!Ext.isEmpty(this.itemSearch)) {
+            itemStore.filter([
+                {
+                    property: 'name',
+                    value: this.itemSearch,
+                    anyMatch: true
+                }
+            ]);
+        } else {
+            itemStore.clearFilter();
+        }
+    },
+    loadItems: function(callback) {
+        var self = this;
         var record = this.getMainView().getRecord();
         var domain = [
                 [
@@ -70145,41 +70254,60 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                     record !== null ? record.getId() : null
                 ]
             ];
+        // define optiones      
+        var afterLoadCallbackCount = 0;
         var options = {
                 params: {
                     domain: domain
+                },
+                callback: function() {
+                    if (++afterLoadCallbackCount >= 2) {
+                        if (callback) {
+                            callback();
+                        }
+                        // filter if search was active
+                        if (!Ext.isEmpty(this.itemSearch)) {
+                            self.searchItems();
+                        }
+                    }
                 }
             };
-        if (callback) {
-            // check for callback
-            var afterLoadCallbackCount = 0;
-            var afterLoadCallback = function() {
-                    if (++afterLoadCallbackCount >= 2) {
-                        callback();
-                    }
-                };
-            options.callback = afterLoadCallback;
-        }
-        if (!Ext.isEmpty(this.itemSearch)) {
-            options.filters = [
-                {
-                    property: 'name',
-                    value: this.itemSearch
-                }
-            ];
-        }
-        // load data
-        var itemStore = Ext.StoreMgr.lookup("ItemStore");
-        itemStore.load(options);
         // load header item
         var headerItemStore = Ext.StoreMgr.lookup("HeaderItemStore");
         headerItemStore.load(options);
+        // load items
+        var itemStore = Ext.StoreMgr.lookup("ItemStore");
+        itemStore.load(options);
     },
-    createItem: function(view) {
+    startLoading: function(val) {
+        Ext.Viewport.setMasked({
+            xtype: 'loadmask',
+            message: val
+        });
+    },
+    stopLoading: function() {
+        Ext.Viewport.setMasked(false);
+    },
+    isDoubleTap: function(val) {
         var self = this;
+        if (!self.doubleTap) {
+            self.doubleTap = true;
+            setTimeout(function() {
+                self.doubleTap = false;
+            }, 1000);
+            return false;
+        }
+        return true;
+    },
+    createItem: function() {
+        var self = this;
+        // check doubletap 
+        if (self.isDoubleTap()) {
+            return;
+        }
         var mainView = self.getMainView();
         var parentRec = mainView.getRecord();
-        // new view
+        // new view         
         var itemForm = Ext.create("Fclipboard.view.FormView", {
                 title: 'Neues Dokument',
                 xtype: 'formview',
@@ -70199,17 +70327,16 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                     db.post(values, function(err, res) {
                         if (!err) {
                             if (template_id) {
-                                // clone template
-                                var mbox = Ext.Msg.show({
-                                        title: "Neues Dokument",
-                                        message: "Erstelle Struktur...",
-                                        buttons: []
-                                    });
+                                //
+                                self.startLoading("Erstelle Struktur");
+                                //                           
                                 var newDocId = res.id;
                                 PouchDBDriver.deepCopy(db, res.id, template_id, "parent_id", {
                                     template: false
                                 }, function(err, res) {
-                                    mbox.hide();
+                                    //
+                                    self.stopLoading();
+                                    //                            
                                     if (!err && template_id) {
                                         // open view if template was defined
                                         callback(err, function() {
@@ -70255,6 +70382,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     },
     loadRoot: function(callback) {
         this.getMainView().setRecord(null);
+        this.reloadPartner = true;
         this.loadRecord(callback);
     },
     valueToString: function(val, vtype) {
@@ -70314,18 +70442,22 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                             if (!val) {
                                 return;
                             }
-                            info.infoFields.push({
-                                "label": item.label,
-                                "value": val
-                            });
+                            if (!info.header) {
+                                info.header = val;
+                            } else {
+                                info.infoFields.push({
+                                    "label": item.label,
+                                    "value": val
+                                });
+                            }
                         }
                     });
                     if (!self.infoTemplate) {
-                        self.infoTemplate = new Ext.XTemplate('<tpl if="path">', '<div class="fclipboard-path">{path}</div>', '</tpl>', '<tpl if="infoFields.length &gt; 0">', '<div class="fc-info-container">', '<tpl for="infoFields">', '<div class="{[this.getClassHeader(xindex)]}">', '<span class="fc-info-label">', '{label}: ', '</span>', '<span class="fc-info-value">', '{value}', '</span>', '</div>', '</tpl>', '<div class="fc-info-last"></div>', '</div>', '</tpl>', {
-                            getClassHeader: function(xindex) {
-                                return xindex == 1 ? "fc-info-header" : "fc-info-field";
-                            }
-                        });
+                        if (futil.screenHeight() < 700) {
+                            self.infoTemplate = new Ext.XTemplate('<tpl if="path">', '<div class="fclipboard-path">{path}</div>', '</tpl>', '<tpl if="header">', '<div class="fc-info-container">', '<div class="fclipboard-path">', '{header}', '</div>', '<div class="fc-info-last"></div>', '</div>', '</tpl>');
+                        } else {
+                            self.infoTemplate = new Ext.XTemplate('<tpl if="path">', '<div class="fclipboard-path">{path}</div>', '</tpl>', '<tpl if="header">', '<div class="fc-info-container">', '<div class="fclipboard-path">', '{header}', '</div>', '<tpl for="infoFields">', '<div class="fc-info-field">', '<div class="fc-info-label">', '{label}: ', '</div>', '<div class="fc-info-value">', '{value}', '</div>', '</div>', '</tpl>', '<div class="fc-info-last"></div>', '</div>', '</tpl>');
+                        }
                     }
                     // set info            
                     self.getItemInfo().setHtml(self.infoTemplate.apply(info));
@@ -70336,38 +70468,39 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 });
             };
         // check for callback
-        var afterLoadCallbackCount = 0;
         var afterLoadCallback = function() {
-                if (++afterLoadCallbackCount == 2) {
-                    if (record) {
-                        // search pricelist
-                        PouchDBDriver.findFirstChild(self.getDB(), record.getId(), "parent_id", [
-                            [
-                                "rtype",
-                                "=",
-                                "pricelist_id"
-                            ]
-                        ], function(err, doc) {
-                            // check error or no pricelist found
-                            if (err || !doc || !doc.pricelist_id) {
+                if (record) {
+                    // search pricelist
+                    PouchDBDriver.findFirstChild(self.getDB(), record.getId(), "parent_id", [
+                        [
+                            "rtype",
+                            "=",
+                            "pricelist_id"
+                        ]
+                    ], function(err, doc) {
+                        // check error or no pricelist found
+                        if (err || !doc || !doc.pricelist_id) {
+                            handleCallback(err);
+                        } else {
+                            db.get(doc.pricelist_id, function(err, pricelist) {
+                                // set pricelist
+                                self.pricelist = !err && pricelist || null;
                                 handleCallback(err);
-                            } else {
-                                db.get(doc.pricelist_id, function(err, pricelist) {
-                                    // set pricelist
-                                    self.pricelist = !err && pricelist || null;
-                                    handleCallback(err);
-                                });
-                            }
-                        });
-                    } else // if no record search no pricelist
-                    {
-                        handleCallback();
-                    }
+                            });
+                        }
+                    });
+                } else // if no record search no pricelist
+                {
+                    handleCallback();
                 }
             };
         // load data
-        self.searchItems(afterLoadCallback);
-        self.searchPartner(afterLoadCallback);
+        self.loadItems(afterLoadCallback);
+        // check reload partner flag
+        if (this.reloadPartner) {
+            this.reloadPartner = false;
+            this.searchPartner();
+        }
     },
     editCurrentItem: function() {
         var mainView = this.getMainView();
@@ -70601,11 +70734,17 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         self.loadHeaderValues(record, showView);
     },
     newPartner: function() {
+        this.reloadPartner = true;
         var newPartner = Ext.create('Fclipboard.model.Partner', {});
         this.editPartner(newPartner);
     },
     editPartner: function(record) {
         var self = this;
+        self.reloadPartner = true;
+        // check doubletap 
+        if (self.isDoubleTap()) {
+            return;
+        }
         self.getMainView().push({
             title: 'Partner',
             xtype: 'partnerform',
@@ -70639,6 +70778,10 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     },
     saveRecord: function() {
         var self = this;
+        //check double 
+        if (self.isDoubleTap()) {
+            return;
+        }
         var mainView = self.getMainView();
         var view = mainView.getActiveItem();
         // check fields for errors
@@ -70665,7 +70808,9 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         try {
             saveHandler = view.getSaveHandler();
         } catch (err) {}
+        self.startLoading("Dokument wird gespeichert...");
         var reloadHandler = function(err, callback) {
+                self.stopLoading();
                 mainView.pop();
                 self.loadRecord(callback);
             };
@@ -70685,6 +70830,10 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     },
     deleteRecord: function() {
         var self = this;
+        // check doubletap 
+        if (self.isDoubleTap()) {
+            return;
+        }
         var record = self.getMainView().getActiveItem().getRecord();
         if (record !== null) {
             Ext.Msg.confirm('Löschen', 'Soll der ausgewählte Datensatz gelöscht werden?', function(choice) {
@@ -70709,7 +70858,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         //check for product selection
         if (record.get('rtype') == "product_id" && record.get('section') == 20) {
             var store = Ext.getStore("ItemStore");
-            self.showNumberInput(element, record.get('valf'), function(view, newValue) {
+            self.showNumberInput(element, record.get('valf'), record.get('name'), function(view, newValue) {
                 if (newValue !== 0) {
                     record.set('valf', newValue);
                 } else {
@@ -70744,13 +70893,13 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             self.createItem();
         } else {
             var itemStore = Ext.getStore("ItemStore");
-            var productItems = itemStore.queryBy(function(record) {
-                    if (record.get('rtype') == "product_id") {
-                        return true;
-                    }
-                    return false;
-                });
-            if (itemStore.getCount() === 0) {
+            var productItems = [];
+            Ext.each(itemStore.data.all, function(item) {
+                if (item.get('rtype') == 'product_id') {
+                    productItems.push(item);
+                }
+            });
+            if (itemStore.data.all.length === 0) {
                 var newItemPicker = Ext.create('Ext.Picker', {
                         doneButton: 'Erstellen',
                         cancelButton: 'Abbrechen',
@@ -70805,123 +70954,140 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     },
     addProduct: function() {
         var self = this;
+        // check doubletap 
+        if (self.isDoubleTap()) {
+            return;
+        }
+        self.startLoading("Lade Preisliste");
         var record = this.getMainView().getRecord();
         if (self.pricelist && record) {
             var db = self.getDB();
+            // order 
+            var order = {};
+            var orderItems = {};
+            //show pricelist view
+            var showPriceListView = function() {
+                    var view = Ext.create("Fclipboard.view.PricelistView", {
+                            title: self.pricelist.name,
+                            pricelist: self.pricelist,
+                            order: order,
+                            saveHandler: function(view, callback) {
+                                var update = [];
+                                var newOrder = view.getOrder();
+                                // update create new                     
+                                Ext.iterate(newOrder, function(product_id, line) {
+                                    if (product_id in orderItems) {
+                                        var doc = orderItems[product_id];
+                                        if (doc.valf !== line.qty || doc.name !== line.name) {
+                                            if (line.qty === 0) {
+                                                // delete
+                                                update.push({
+                                                    _id: doc._id,
+                                                    _rev: doc._rev,
+                                                    _deleted: true
+                                                });
+                                            } else {
+                                                doc.name = line.name;
+                                                doc.valf = line.qty;
+                                                doc.code = line.code;
+                                                doc.valc = line.uom;
+                                                doc.sequence = line.sequence;
+                                                doc.group = line.category;
+                                                update.push(doc);
+                                            }
+                                        }
+                                    } else if (line.qty !== 0) {
+                                        update.push({
+                                            fdoo__ir_model: "fclipboard.item",
+                                            product_id: product_id,
+                                            name: line.name,
+                                            parent_id: record.getId(),
+                                            section: 20,
+                                            rtype: "product_id",
+                                            dtype: "f",
+                                            valf: line.qty,
+                                            code: line.code,
+                                            valc: line.uom,
+                                            sequence: line.sequence,
+                                            group: line.category
+                                        });
+                                    }
+                                });
+                                // update and do callback
+                                db.bulkDocs(update, function(err, res) {
+                                    callback(err);
+                                });
+                            }
+                        });
+                    self.getMainView().push(view);
+                };
             // search current items
-            PouchDBDriver.search(db, [
-                [
-                    "parent_id",
-                    "=",
-                    record.getId()
-                ],
-                [
-                    "section",
-                    "=",
-                    20
-                ],
-                [
-                    "rtype",
-                    "=",
-                    "product_id"
-                ]
-            ], {
-                'include_docs': true
-            }, function(err, result) {
-                if (err) {
+            var store = Ext.getStore("ItemStore");
+            Ext.each(store.data.all, function(item) {
+                var doc = item.raw;
+                //create order line
+                order[doc.product_id] = {
+                    name: item.get('name'),
+                    qty: item.get('valf'),
+                    uom: item.get('valc'),
+                    code: item.get('code'),
+                    product_id: item.get('product_id'),
+                    sequence: item.get('sequence'),
+                    category: item.get('group')
+                };
+                orderItems[doc.product_id] = doc;
+            });
+            showPriceListView();
+        }
+    },
+    /** reload order items   
+            PouchDBDriver.search(db, [["parent_id","=",record.getId()],["section","=",20],["rtype","=","product_id"]], {'include_docs':true}, function(err, result) {
+                if ( err ) {
                     return;
-                }
-                var order = {};
-                var orderItems = {};
+                } 
+               
                 Ext.each(result.rows, function(row) {
                     var doc = row.doc;
                     //create order line
-                    order[doc.product_id] = {
-                        name: doc.name,
-                        qty: doc.valf,
-                        uom: doc.valc,
-                        code: doc.code,
-                        product_id: doc.product_id,
+                    order[doc.product_id]={
+                        name : doc.name,
+                        qty : doc.valf,
+                        uom : doc.valc,
+                        code : doc.code,
+                        product_id : doc.product_id,
                         sequence: doc.sequence,
                         category: doc.group
-                    };
-                    orderItems[doc.product_id] = doc;
+                    };                    
+                    orderItems[doc.product_id]=doc;
                 });
-                var view = Ext.create("Fclipboard.view.PricelistView", {
-                        title: self.pricelist.name,
-                        pricelist: self.pricelist,
-                        order: order,
-                        saveHandler: function(view, callback) {
-                            var update = [];
-                            var newOrder = view.getOrder();
-                            // update create new                     
-                            Ext.iterate(newOrder, function(product_id, line) {
-                                if (product_id in orderItems) {
-                                    var doc = orderItems[product_id];
-                                    if (doc.valf !== line.qty || doc.name !== line.name) {
-                                        if (line.qty === 0) {
-                                            // delete
-                                            update.push({
-                                                _id: doc._id,
-                                                _rev: doc._rev,
-                                                _deleted: true
-                                            });
-                                        } else {
-                                            doc.name = line.name;
-                                            doc.valf = line.qty;
-                                            doc.code = line.code;
-                                            doc.valc = line.uom;
-                                            doc.sequence = line.sequence;
-                                            doc.group = line.category;
-                                            update.push(doc);
-                                        }
-                                    }
-                                } else if (line.qty !== 0) {
-                                    update.push({
-                                        fdoo__ir_model: "fclipboard.item",
-                                        product_id: product_id,
-                                        name: line.name,
-                                        parent_id: record.getId(),
-                                        section: 20,
-                                        rtype: "product_id",
-                                        dtype: "f",
-                                        valf: line.qty,
-                                        code: line.code,
-                                        valc: line.uom,
-                                        sequence: line.sequence,
-                                        group: line.category
-                                    });
-                                }
-                            });
-                            // update and do callback
-                            db.bulkDocs(update, function(err, res) {
-                                callback(err);
-                            });
-                        }
-                    });
-                self.getMainView().push(view);
-            });
-        }
-    },
+                               
+                showPriceListView();
+            });*/
     sync: function() {
         var self = this;
+        //check double 
+        if (self.isDoubleTap()) {
+            return;
+        }
         if (!self.syncActive) {
             self.syncActive = true;
             // start dialog
-            var mbox = Ext.Msg.show({
-                    title: "Synchronisation",
-                    message: "Datenabgleich mit Server",
-                    buttons: []
-                });
+            self.startLoading("Datenabgleich mit Server");
             // clear log
             var log = self.getLog();
             log.removeAll();
             // define callback
             var callback = function(err) {
                     self.syncActive = false;
-                    mbox.hide();
+                    self.stopLoading();
                     if (err) {
-                        log.error(err);
+                        if (err === 'Timeout') {
+                            log.error("Zeitüberschreitung bei Verbindung zu Server");
+                        } else if (err == 'Offline') {
+                            log.error("Es kann keine Verbindung zum Server hergestellt werden");
+                        } else {
+                            log.error(err);
+                        }
                         log.warning("<b>Synchronisation mit Fehlern abgeschlossen!</b>");
                     } else {
                         log.info("<b>Synchronisation beendet!</b>");
@@ -70938,11 +71104,33 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 if (!err) {
                     log.info("Hochladen auf <b>" + config.host + ":" + config.port + "</b> mit Benutzer <b>" + config.user + "</b>");
                     // reload after sync
-                    PouchDBDriver.syncOdoo(config, [
-                        Ext.getStore("PartnerStore"),
-                        Ext.getStore("BasicItemStore"),
-                        Ext.getStore("PricelistStore")
-                    ], log, callback);
+                    PouchDBDriver.syncOdoo({
+                        access: config,
+                        stores: [
+                            Ext.getStore("PartnerStore"),
+                            Ext.getStore("BasicItemStore"),
+                            Ext.getStore("PricelistStore")
+                        ],
+                        actions: [
+                            {
+                                model: "fclipboard.item",
+                                field_id: "root_id",
+                                domain: [
+                                    [
+                                        "state",
+                                        "!=",
+                                        "release"
+                                    ],
+                                    [
+                                        "template",
+                                        "=",
+                                        false
+                                    ]
+                                ],
+                                action: "action_release"
+                            }
+                        ]
+                    }, log, callback);
                 } else {
                     callback(err);
                 }
@@ -70950,16 +71138,32 @@ Ext.define('Ext.data.identifier.LocalUuid', {
         }
     },
     testNumberInput: function(c) {
-        this.showNumberInput(c, 0);
+        this.showNumberInput(c, 0, '');
     },
-    showNumberInput: function(nextTo, val, callback) {
+    showNumberInput: function(nextTo, val, info, callback) {
         var self = this;
+        /*                
+        if ( futil.screenWidth() < 700 ) {
+            //check number view
+            if ( !self.numberInputView ) {
+                self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
+            }
+            // show
+            self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, info, callback);
+        } else {
+            //check number view
+            if ( !self.numberInputView ) {
+                self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
+            }
+            // show
+            self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, callback);
+        }*/
         //check number view
         if (!self.numberInputView) {
-            self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
+            self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
         }
         // show
-        self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, callback);
+        self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, info, callback);
     },
     resetSync: function(nextTo) {
         var self = this;
@@ -71137,6 +71341,324 @@ Ext.define('Ext.data.identifier.LocalUuid', {
 ], 0, [
     Fclipboard.view,
     'PartnerView'
+], 0));
+
+/*global Ext:false, futil:false*/
+(Ext.cmd.derive('Fclipboard.view.SmallNumberInputView', Ext.Panel, {
+    config: {
+        layout: 'vbox',
+        firstReplace: true,
+        handler: null,
+        hideOnMaskTap: true,
+        modal: true,
+        width: "236px",
+        listeners: [
+            {
+                fn: 'addNumber',
+                event: 'tap',
+                delegate: 'button[action=addNumber]'
+            },
+            {
+                fn: 'clearInput',
+                event: 'tap',
+                delegate: 'button[action=clearInput]'
+            },
+            {
+                fn: 'changeSign',
+                event: 'tap',
+                delegate: 'button[action=changeSign]'
+            },
+            {
+                fn: 'addComma',
+                event: 'tap',
+                delegate: 'button[action=addComma]'
+            },
+            {
+                fn: 'numInputDone',
+                event: 'tap',
+                delegate: 'button[action=numInputDone]'
+            },
+            {
+                fn: 'showInput',
+                event: 'show'
+            },
+            {
+                fn: 'hideInput',
+                event: 'hide'
+            }
+        ],
+        items: [
+            {
+                xtype: 'container',
+                layout: 'hbox',
+                items: [
+                    {
+                        xtype: 'numberview',
+                        clsValue: 'NumberViewSmall',
+                        flex: 1
+                    }
+                ]
+            },
+            {
+                xtype: 'container',
+                layout: 'vbox',
+                cls: 'NumInputContainer',
+                items: [
+                    {
+                        layout: 'hbox',
+                        items: [
+                            {
+                                xtype: 'button',
+                                text: '7',
+                                width: '48px',
+                                height: '44px',
+                                ui: 'numInputButtonBlack',
+                                cls: 'NumInputButton',
+                                action: 'addNumber'
+                            },
+                            {
+                                xtype: 'button',
+                                text: '8',
+                                width: '48px',
+                                height: '44px',
+                                ui: 'numInputButtonBlack',
+                                cls: 'NumInputButton',
+                                action: 'addNumber'
+                            },
+                            {
+                                xtype: 'button',
+                                text: '9',
+                                width: '48px',
+                                height: '44px',
+                                ui: 'numInputButtonBlack',
+                                cls: 'NumInputButton',
+                                action: 'addNumber'
+                            },
+                            {
+                                xtype: 'button',
+                                text: 'CE',
+                                width: '48px',
+                                height: '44px',
+                                ui: 'numInputButtonRed',
+                                cls: 'NumInputButton',
+                                action: 'clearInput'
+                            }
+                        ]
+                    },
+                    {
+                        layout: 'hbox',
+                        items: [
+                            {
+                                xtype: 'button',
+                                text: '4',
+                                width: '48px',
+                                height: '44px',
+                                ui: 'numInputButtonBlack',
+                                cls: 'NumInputButton',
+                                action: 'addNumber'
+                            },
+                            {
+                                xtype: 'button',
+                                text: '5',
+                                width: '48px',
+                                height: '44px',
+                                ui: 'numInputButtonBlack',
+                                cls: 'NumInputButton',
+                                action: 'addNumber'
+                            },
+                            {
+                                xtype: 'button',
+                                text: '6',
+                                width: '48px',
+                                height: '44px',
+                                ui: 'numInputButtonBlack',
+                                cls: 'NumInputButton',
+                                action: 'addNumber'
+                            },
+                            {
+                                xtype: 'button',
+                                text: '-',
+                                width: '48px',
+                                height: '44px',
+                                ui: 'numInputButtonBlack',
+                                cls: 'NumInputButton',
+                                action: 'changeSign'
+                            }
+                        ]
+                    },
+                    {
+                        layout: 'hbox',
+                        items: [
+                            {
+                                layout: 'vbox',
+                                items: [
+                                    {
+                                        layout: 'hbox',
+                                        items: [
+                                            {
+                                                xtype: 'button',
+                                                text: '1',
+                                                width: '48px',
+                                                height: '44px',
+                                                ui: 'numInputButtonBlack',
+                                                cls: 'NumInputButton',
+                                                action: 'addNumber'
+                                            },
+                                            {
+                                                xtype: 'button',
+                                                text: '2',
+                                                width: '48px',
+                                                height: '44px',
+                                                ui: 'numInputButtonBlack',
+                                                cls: 'NumInputButton',
+                                                action: 'addNumber'
+                                            },
+                                            {
+                                                xtype: 'button',
+                                                text: '3',
+                                                width: '48px',
+                                                height: '44px',
+                                                ui: 'numInputButtonBlack',
+                                                cls: 'NumInputButton',
+                                                action: 'addNumber'
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        layout: 'hbox',
+                                        items: [
+                                            {
+                                                xtype: 'button',
+                                                text: '0',
+                                                width: '99px',
+                                                height: '44px',
+                                                ui: 'numInputButtonBlack',
+                                                cls: 'NumInputButton',
+                                                action: 'addNumber'
+                                            },
+                                            {
+                                                xtype: 'button',
+                                                text: '.',
+                                                width: '48px',
+                                                height: '44px',
+                                                ui: 'numInputButtonBlack',
+                                                cls: 'NumInputButton',
+                                                action: 'addComma'
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                xtype: 'button',
+                                text: '=',
+                                width: '48px',
+                                height: '91px',
+                                ui: 'numInputButtonBlack',
+                                cls: 'NumInputButton',
+                                action: 'numInputDone'
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    initialize: function() {
+        var self = this;
+        self.callParent(arguments);
+        // get num field
+        self.numField = self.query('numberview')[0];
+    },
+    addComma: function() {
+        var val = this.numField.getValue();
+        if (val && val.indexOf(futil.comma) !== -1) {
+            return;
+        }
+        val += futil.comma;
+        this.numField.setValue(val);
+    },
+    addNumber: function(button) {
+        var val = this.numField.getValue();
+        if (!val || this.getFirstReplace() || val == '0') {
+            this.setFirstReplace(false);
+            val = '';
+        }
+        val += button.getText();
+        this.numField.setValue(val);
+    },
+    setValue: function(val) {
+        this.numField.setValue(futil.formatFloat(val, 0));
+        return val;
+    },
+    getValue: function(val) {
+        return futil.parseFloat(this.numField.getValue());
+    },
+    clearInput: function() {
+        this.setValue(0);
+    },
+    changeSign: function() {
+        var val = this.getValue();
+        val = val * -1;
+        this.setValue(val);
+    },
+    numInputDone: function() {
+        try {
+            var handler = this.getHandler();
+            if (handler) {
+                handler(this, this.getValue());
+            }
+        } finally {
+            this.hide();
+        }
+    },
+    showInput: function() {
+        this.visible = true;
+        this.setFirstReplace(true);
+    },
+    hideInput: function() {
+        if (this.visible) {
+            this.visible = false;
+            this.setHandler(null);
+        }
+    },
+    showBy: function(component, alignment, animation, value, info, callback) {
+        var self = this;
+        // set handler
+        if (!value) {
+            value = 0;
+        }
+        self.numField.setInfo(info || '');
+        self.setValue(value);
+        self.setHandler(callback);
+        // call parent        
+        var successful = false;
+        try {
+            self.callParent(arguments);
+            successful = true;
+        } finally {
+            if (!successful) {
+                self.setHandler(null);
+            }
+        }
+    }
+}, 0, [
+    "smallnumberinput"
+], [
+    "component",
+    "container",
+    "panel",
+    "smallnumberinput"
+], {
+    "component": true,
+    "container": true,
+    "panel": true,
+    "smallnumberinput": true
+}, [
+    "widget.smallnumberinput"
+], 0, [
+    Fclipboard.view,
+    'SmallNumberInputView'
 ], 0));
 
 //    PouchDB 3.6.0
@@ -79561,6 +80083,14 @@ Ext.define('Ext.data.identifier.LocalUuid', {
 var futil = {
         comma: ","
     };
+futil.screenWidth = function() {
+    var width = (window.innerWidth > 0) ? window.innerWidth : screen.width;
+    return width;
+};
+futil.screenHeight = function() {
+    var height = (window.innerHeight > 0) ? window.innerHeight : screen.height;
+    return height;
+};
 futil.formatFloat = function(num, digits) {
     if (!num) {
         num = 0;
@@ -79620,16 +80150,25 @@ openerplib.json_rpc = function(url, fct, params, callback) {
         }
         var contentType = req.getResponseHeader('Content-Type');
         if (req.status !== 200) {
-            callback(null, 'Expected HTTP response "200 OK", found "' + req.status + ' ' + req.statusText + '"');
-        } else if (contentType.indexOf('application/json') !== 0) {
-            callback(null, 'Expected JSON encoded response, found "' + contentType + '"');
+            callback('Offline', null);
+        }
+        //callback('Expected HTTP response "200 OK", found "' + req.status + ' ' + req.statusText + '"', null);
+        else if (contentType.indexOf('application/json') !== 0) {
+            callback('Expected JSON encoded response, found "' + contentType + '"', null);
         } else {
             var result = JSON.parse(this.responseText);
             callback(result.error || null, result.result || null);
         }
     };
+    req.ontimeout = function() {
+        callback("Timeout", null);
+    };
     // send request
-    req.send(JSON.stringify(data));
+    try {
+        req.send(JSON.stringify(data));
+    } catch (err) {
+        callback(err, null);
+    }
 };
 openerplib.Service = function(con, service) {
     var self = this;
@@ -79741,6 +80280,7 @@ openerplib.get_connection = function(host, protocol, port, database, login, pass
 Ext.application({
     name: 'Fclipboard',
     views: [
+        'NumberView',
         'ScrollList',
         'Main',
         'FormView',
@@ -79748,6 +80288,7 @@ Ext.application({
         'PartnerView',
         'ConfigView',
         'NumberInputView',
+        'SmallNumberInputView',
         'PricelistView'
     ],
     /*,
@@ -79808,8 +80349,8 @@ Ext.application({
 });
 
 // @tag full-page
-// @require /Users/martin/Work/odoo/addons-funkring-extra/fclipboard/static/app/pouchdb-3.6.0.min.js
-// @require /Users/martin/Work/odoo/addons-funkring-extra/fclipboard/static/app/futil.js
-// @require /Users/martin/Work/odoo/addons-funkring-extra/fclipboard/static/app/openerplib.js
-// @require /Users/martin/Work/odoo/addons-funkring-extra/fclipboard/static/app/app.js
+// @require /Users/martin/Work/odoo/fclipboard/pouchdb-3.6.0.min.js
+// @require /Users/martin/Work/odoo/fclipboard/futil.js
+// @require /Users/martin/Work/odoo/fclipboard/openerplib.js
+// @require /Users/martin/Work/odoo/fclipboard/app.js
 
