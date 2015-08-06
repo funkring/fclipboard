@@ -15,10 +15,10 @@
    id="svg7664"
    version="1.1"
    inkscape:version="0.48.4 r9939"
-   sodipodi:docname="icon.svg"
-   inkscape:export-filename="/home/martin/Work/openerp-merge/addons-funkring/at_project/static/description/icon.png"
-   inkscape:export-xdpi="90"
-   inkscape:export-ydpi="90">
+   sodipodi:docname="icon_appstore.svg"
+   inkscape:export-filename="/home/martin/Work/odoo/fclipboard/doc/icon_appstore.png"
+   inkscape:export-xdpi="720"
+   inkscape:export-ydpi="720">
   <defs
      id="defs7666">
     <linearGradient
@@ -258,7 +258,7 @@
      pagecolor="#ffffff"
      bordercolor="#666666"
      borderopacity="1.0"
-     inkscape:pageopacity="0.0"
+     inkscape:pageopacity="1"
      inkscape:pageshadow="2"
      inkscape:zoom="1.4"
      inkscape:cx="-223.4699"
