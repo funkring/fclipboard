@@ -20,20 +20,15 @@ Ext.application({
 
     views: [
         'NumberView',
-        'ScrollList',
-        'Main',
+        'ScrollList',               
         'FormView',       
         'ListSelect',
         'PartnerView',
         'ConfigView',
         'NumberInputView',
         'SmallNumberInputView',
-        'PricelistView'
-        /*,
-        'ListSelect',
-        'ScrollList',
         'PricelistView',
-        'NumberInputView'*/
+        'Main'
     ],
 
     models: [
@@ -58,7 +53,10 @@ Ext.application({
     ],
     
     controllers: [
-        'Main'
+        'MainCtrl',
+        'ItemTabCtrl',
+        'PartnerTabCtrl',
+        'SyncTabCtrl'
     ],
     
     icon: {

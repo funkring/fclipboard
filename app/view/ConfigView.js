@@ -3,7 +3,7 @@
 Ext.define('Fclipboard.view.ConfigView', {
     extend: 'Fclipboard.view.FormView',    
     xtype: 'configform',
-     requires: [
+    requires: [
         'Ext.form.FieldSet', 
         'Ext.field.Text',
         'Ext.field.Password',

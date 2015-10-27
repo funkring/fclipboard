@@ -1,4 +1,4 @@
-/*global Ext:false,PouchDB:false,PouchDBDriver:false*/
+/*global Ext:false,PouchDB:false,DBUtil:false*/
 
 Ext.define('Ext.data.reader.PouchDB',{
     extend: 'Ext.data.reader.Reader',
@@ -30,7 +30,7 @@ Ext.define('Ext.proxy.PouchDB', {
     extend: 'Ext.data.proxy.Proxy',
     alias: 'proxy.pouchdb',
     requires: [
-        'Ext.proxy.PouchDBDriver'
+        'Ext.proxy.PouchDBUtil'
     ],
     config: {
         
@@ -320,7 +320,8 @@ Ext.define('Ext.proxy.PouchDB', {
             }
         }
         
-        return new Model(data, doc._id);
+        var model = new Model(data, doc._id, doc);
+        return model;
     },
     
     /**
@@ -384,7 +385,7 @@ Ext.define('Ext.proxy.PouchDB', {
     // read document callback
     readDocument: function(uuid, callback) {
         var self = this;
-        var db = PouchDBDriver.getDB(self.getDatabase());
+        var db = DBUtil.getDB(self.getDatabase());
         db.get(uuid).then(function(doc) {
             var record = self.createRecord(doc);
             callback(null,record);
@@ -396,7 +397,7 @@ Ext.define('Ext.proxy.PouchDB', {
     // read function
     read: function(operation, callback, scope) {
         var self = this;
-        var db = PouchDBDriver.getDB(self.getDatabase());
+        var db = DBUtil.getDB(self.getDatabase());
         var param;
         var params = {'include_docs':true};
         var filter_domain = self.getDefaultDomain();
@@ -529,13 +530,13 @@ Ext.define('Ext.proxy.PouchDB', {
         };                
         
         // QUERY
-        PouchDBDriver.search(db, filter_domain, params, resultCallback);
+        DBUtil.search(db, filter_domain, params, resultCallback);
     },
     
     // update function
     update: function(operation, callback, scope) {
         var self = this;    
-        var db = PouchDBDriver.getDB(self.getDatabase());
+        var db = DBUtil.getDB(self.getDatabase());
          
         operation.setStarted();
         
@@ -587,7 +588,7 @@ Ext.define('Ext.proxy.PouchDB', {
     // destroy
     destroy: function(operation, callback, scope) {
         var self = this;     
-        var db = PouchDBDriver.getDB(self.getDatabase());
+        var db = DBUtil.getDB(self.getDatabase());
            
         operation.setStarted();
         

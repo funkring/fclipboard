@@ -71,15 +71,17 @@ Ext.define('Fclipboard.view.PricelistView', {
          
         if ( futil.screenWidth() < 700 ) {
             pricelist.setItemTpl(Ext.create('Ext.XTemplate', 
-                                    '<div class="col-75 {cls}">{code} {name} {uom}</div>',
+                                    '<div class="col-75 {cls}">{code} {iname} {uom}</div>',
                                     '<div class="col-25-right {cls}">{qty}</div>',
                                     '<div class="col-last"></div>',
                                 {
                                   apply: function(values, parent) {
                                      var line = self.getOrder()[values.product_id];
                                      var qty = 0.0;
+                                    var iname = values.name; 
                                      if ( line ) {
                                         qty = line.qty;
+                                        iname = line.name;
                                      }
                                      
                                      var cls='';
@@ -89,6 +91,7 @@ Ext.define('Fclipboard.view.PricelistView', {
                                      
                                      values.cls = cls;
                                      values.qty = futil.formatFloat(qty);
+                                     values.iname = iname;
                                      return this.applyOut(values, [], parent).join('');
                                   }      
                                 }));
@@ -97,7 +100,7 @@ Ext.define('Fclipboard.view.PricelistView', {
         } else {
              pricelist.setItemTpl(Ext.create('Ext.XTemplate', 
                                     '<div class="col-10 {cls}">{code}</div>',
-                                    '<div class="col-70 {cls}">{name}</div>',
+                                    '<div class="col-70 {cls}">{iname}</div>',
                                     '<div class="col-10 {cls}">{uom}</div>',
                                     '<div class="col-10-right {cls}">{qty}</div>',
                                     '<div class="col-last {cls}"></div>',
@@ -105,8 +108,10 @@ Ext.define('Fclipboard.view.PricelistView', {
                                   apply: function(values, parent) {
                                      var line = self.getOrder()[values.product_id];
                                      var qty = 0.0;
+                                     var iname = values.name; 
                                      if ( line ) {
                                         qty = line.qty;
+                                        iname = line.name;
                                      }
                                      
                                      var cls='';
@@ -116,6 +121,7 @@ Ext.define('Fclipboard.view.PricelistView', {
                                      
                                      values.cls = cls;
                                      values.qty = futil.formatFloat(qty);
+                                     values.iname = iname;
                                      return this.applyOut(values, [], parent).join('');
                                   }      
                                 }));
@@ -167,10 +173,10 @@ Ext.define('Fclipboard.view.PricelistView', {
         var product_id = record.get('product_id');   
         var line = self.getOrder()[product_id]; 
         var qty = line && line.qty || 0.0;
-        var name = record.get('name');
+        var name = line && line.name || record.get('name');
         var validateNumberInput = function(numInput, newVal) {
                 self.getOrder()[product_id]={
-                    name: record.get('name'),
+                    name: name,
                     qty: newVal,
                     uom: record.get('uom'),
                     code: record.get('code'),

@@ -1,9 +1,30 @@
+/*global Ext:false*/
 
 /**
  * funkring util lib
  */
 var futil = {
-    comma: ","
+    comma: ",",
+    activetap: false
+};
+
+futil.isDoubleTap = function() {
+    if ( !futil.activetab ) {
+        futil.activetab = true;
+        setTimeout(function() {
+            futil.activetab = false;
+        },1000);
+        return false;
+    }        
+    return true;
+};
+
+futil.startLoading = function(msg) {
+    Ext.Viewport.setMasked({xtype: 'loadmask', message: msg});    
+};
+    
+futil.stopLoading = function() {
+    Ext.Viewport.setMasked(false);
 };
 
 futil.screenWidth = function() {

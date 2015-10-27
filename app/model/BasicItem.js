@@ -5,10 +5,10 @@ Ext.define('Fclipboard.model.BasicItem', {
        'Ext.proxy.PouchDB'
    ],
    config: {
-       fields: ['name','code','template','parent_id','dtype','rtype',
+       fields: ['name','code','template','template_id','parent_id','dtype','rtype',
                 'section','code','sequence', 'required',
                 'product_id', 'pricelist_id', 'partner_id',
-                'valc','valt','valf','vali','valb','vald','group'],
+                'valc','valt','valf','vali','valb','vald','group','rule_ids'],
 //       belongsTo: [{model:'Fclipboard.model.Partner', associationKey:'partner_id'}],
        identifier: 'uuid',
        proxy: {

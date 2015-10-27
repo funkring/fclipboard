@@ -14,6 +14,8 @@ Ext.define('Fclipboard.view.SmallNumberInputView', {
             
         handler: null,
         
+        editHandler: null,
+        
         hideOnMaskTap : true,
                 
         modal: true,
@@ -53,8 +55,12 @@ Ext.define('Fclipboard.view.SmallNumberInputView', {
             {
                 fn: 'hideInput',
                 event: 'hide'
+            },
+            {
+                fn: 'editDetail',
+                event: 'tap',
+                delegate: 'numberview'
             }
-                
         ], 
         items: [
             {   
@@ -310,17 +316,17 @@ Ext.define('Fclipboard.view.SmallNumberInputView', {
         }
     },
     
-    showBy: function(component, alignment, animation, value, info, callback) {
+    showBy: function(component, alignment, animation, value, info, handler, editHandler) {
         var self = this;
-        
-        // set handler
+
         if ( !value ) {
             value = 0.0;
         }
         
         self.numField.setInfo(info || '');
         self.setValue(value);                
-        self.setHandler(callback);
+        self.setHandler(handler);
+        self.setEditHandler(editHandler);
     
         // call parent        
         var successful = false;
@@ -331,6 +337,17 @@ Ext.define('Fclipboard.view.SmallNumberInputView', {
             if (!successful) {
                 self.setHandler(null); 
             }
+        }
+    },
+    
+    editDetail: function() {
+        try {        
+            var handler = this.getEditHandler();
+            if ( handler ) {
+                handler(this, this.getValue());
+            }
+        } finally {
+            this.hide();
         }
     }
 });

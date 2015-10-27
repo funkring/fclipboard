@@ -1,7 +1,7 @@
 /*global Ext:false,PouchDB:false*,openerplib:false, console:false*/
 
-Ext.define('Ext.proxy.PouchDBDriver',{
-    alternateClassName: 'PouchDBDriver',
+Ext.define('Ext.proxy.PouchDBUtil',{
+    alternateClassName: 'DBUtil',
     
     singleton: true,
     
@@ -146,6 +146,34 @@ Ext.define('Ext.proxy.PouchDBDriver',{
     },
     
     /**
+     * search all parents
+     */
+    findParents: function(db, parent_uuid, callback, parent_list) {
+        var self = this;
+        
+        if ( !parent_list ) {
+            parent_list = [];
+        }
+        
+        // check not found
+        if ( !parent_uuid ) {
+            callback(null,null);
+            return;
+        }
+        
+        db.get(parent_uuid).then(function(doc) {
+            parent_list.push(doc);
+            if ( doc.parent_id ) {
+                self.findParents(db, doc.parent_id, callback, parent_list);
+            } else {
+                callback(null, parent_list);
+            }
+        }).catch(function(err) {
+            callback(err);
+        });      
+    },
+    
+    /**
      * search first child where the passed domain match
      * also search up in the parent tree
      */
@@ -180,7 +208,7 @@ Ext.define('Ext.proxy.PouchDBDriver',{
         });
     },
     
-    deepCopy: function(db, new_parent_uuid, template_uuid, parent_field, defaults, callback ) {
+    deepChildCopy: function(db, new_parent_uuid, template_uuid, parent_field, defaults, callback ) {
         var self = this;
         self.search(db, [[parent_field,"=",template_uuid]], {'include_docs':true}, function(err, res) {
             if ( err ) {
@@ -213,7 +241,7 @@ Ext.define('Ext.proxy.PouchDBDriver',{
                    // create copy
                    db.post(child, function(err, res) {
                         if ( !err ) {
-                            self.deepCopy(db, res.id, template_child_uuid, parent_field, defaults, operationCallback);
+                            self.deepChildCopy(db, res.id, template_child_uuid, parent_field, defaults, operationCallback);
                         } else {
                             operationCallback(err, res);
                         }               

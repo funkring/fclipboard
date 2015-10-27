@@ -14,6 +14,8 @@ Ext.define('Fclipboard.view.NumberInputView', {
             
         handler: null,
         
+        editHandler: null,
+        
         hideOnMaskTap : true,
                 
         modal: true,
@@ -53,6 +55,11 @@ Ext.define('Fclipboard.view.NumberInputView', {
             {
                 fn: 'hideInput',
                 event: 'hide'
+            },
+            {
+                fn: 'editDetail',
+                event: 'tap',
+                delegate: 'numberview'
             }
                 
         ], 
@@ -243,8 +250,6 @@ Ext.define('Fclipboard.view.NumberInputView', {
     initialize: function() {
          var self = this;
          self.callParent(arguments);
-         
-         // get num field
          self.numField = self.query('numberview')[0];     
     },
     
@@ -309,16 +314,16 @@ Ext.define('Fclipboard.view.NumberInputView', {
         }
     },
     
-    showBy: function(component, alignment, animation, value, callback) {
+    showBy: function(component, alignment, animation, value, handler, editHandler) {
         var self = this;
         
-        // set handler
         if ( !value ) {
             value = 0.0;
         }
         
         self.setValue(value);        
-        self.setHandler(callback);
+        self.setHandler(handler);
+        self.setEditHandler(editHandler);
     
         // call parent        
         var successful = false;
@@ -329,6 +334,17 @@ Ext.define('Fclipboard.view.NumberInputView', {
             if (!successful) {
                 self.setHandler(null); 
             }
+        }
+    },
+    
+    editDetail: function() {
+        try {        
+            var handler = this.getEditHandler();
+            if ( handler ) {
+                handler(this, this.getValue());
+            }
+        } finally {
+            this.hide();
         }
     }
 });

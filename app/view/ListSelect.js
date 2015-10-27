@@ -68,6 +68,7 @@ Ext.define('Fclipboard.view.ListSelect', {
         
            navigationView.push({
               title: self.getTitle(),
+              newRecord: null,
               xtype : 'container',
               listeners: {
                   scope: self, 
@@ -89,13 +90,17 @@ Ext.define('Fclipboard.view.ListSelect', {
                     itemtap: self.onListTap,
                     scope: self
                 }                  
-              }]
+              }],
+              
+              fieldSelectRecord: function(record) {
+                  self.setValue(record);                  
+              }
                
            });           
         } else {
             return self.callParent(arguments);
         }
-    },
+   },
     
    initialize: function() {
         var self = this;        
