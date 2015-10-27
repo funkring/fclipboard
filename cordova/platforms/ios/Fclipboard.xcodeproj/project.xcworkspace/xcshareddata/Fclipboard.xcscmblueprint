@@ -1,0 +1,30 @@
+{
+  "DVTSourceControlWorkspaceBlueprintPrimaryRemoteRepositoryKey" : "FC7373D66D7FAEB780277A03B96803431624D07F",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyRepositoryLocationsKey" : {
+
+  },
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyStatesKey" : {
+    "FC7373D66D7FAEB780277A03B96803431624D07F" : 0,
+    "C8E4FB4206405E086AEE922BD41282473E695521" : 0
+  },
+  "DVTSourceControlWorkspaceBlueprintIdentifierKey" : "1E94B962-F059-4DA0-B659-944D68E6CC98",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyPathsKey" : {
+    "FC7373D66D7FAEB780277A03B96803431624D07F" : "fclipboard",
+    "C8E4FB4206405E086AEE922BD41282473E695521" : ""
+  },
+  "DVTSourceControlWorkspaceBlueprintNameKey" : "Fclipboard",
+  "DVTSourceControlWorkspaceBlueprintVersion" : 204,
+  "DVTSourceControlWorkspaceBlueprintRelativePathToProjectKey" : "cordova\/platforms\/ios\/Fclipboard.xcodeproj",
+  "DVTSourceControlWorkspaceBlueprintRemoteRepositoriesKey" : [
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "ssh:\/\/git.funkring.net\/git\/workspaces\/ios",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "C8E4FB4206405E086AEE922BD41282473E695521"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "git.funkring.net:\/git\/fclipboard",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "FC7373D66D7FAEB780277A03B96803431624D07F"
+    }
+  ]
+}

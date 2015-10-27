@@ -1,3 +1,5 @@
+var Config = Config || {};
+var DBUtil = DBUtil || {};
 var Ext = Ext || {};
 if (!Ext.Picker) Ext.Picker = {};
 if (!Ext.app) Ext.app = {};
@@ -47,8 +49,8 @@ var Fclipboard = Fclipboard || {};
 if (!Fclipboard.controller) Fclipboard.controller = {};
 if (!Fclipboard.model) Fclipboard.model = {};
 if (!Fclipboard.store) Fclipboard.store = {};
+if (!Fclipboard.util) Fclipboard.util = {};
 if (!Fclipboard.view) Fclipboard.view = {};
-var PouchDBDriver = PouchDBDriver || {};
 /* 
  * Helper code for compiler optimization
  */
@@ -67645,8 +67647,8 @@ Ext.define('Ext.picker.Picker', {
  */
 
 /*global Ext:false,PouchDB:false*,openerplib:false, console:false*/
-(Ext.cmd.derive('Ext.proxy.PouchDBDriver', Ext.Base, {
-    alternateClassName: 'PouchDBDriver',
+(Ext.cmd.derive('Ext.proxy.PouchDBUtil', Ext.Base, {
+    alternateClassName: 'DBUtil',
     singleton: true,
     config: {},
     constructor: function(config) {
@@ -67760,6 +67762,30 @@ Ext.define('Ext.picker.Picker', {
         }
     },
     /**
+     * search all parents
+     */
+    findParents: function(db, parent_uuid, callback, parent_list) {
+        var self = this;
+        if (!parent_list) {
+            parent_list = [];
+        }
+        // check not found
+        if (!parent_uuid) {
+            callback(null, null);
+            return;
+        }
+        db.get(parent_uuid).then(function(doc) {
+            parent_list.push(doc);
+            if (doc.parent_id) {
+                self.findParents(db, doc.parent_id, callback, parent_list);
+            } else {
+                callback(null, parent_list);
+            }
+        }).catch(function(err) {
+            callback(err);
+        });
+    },
+    /**
      * search first child where the passed domain match
      * also search up in the parent tree
      */
@@ -67798,7 +67824,29 @@ Ext.define('Ext.picker.Picker', {
             }
         });
     },
-    deepCopy: function(db, new_parent_uuid, template_uuid, parent_field, defaults, callback) {
+    /**
+     * deep data copy (without _id and _rev)
+     */
+    createClone: function(data) {
+        if (!data) {
+            return data;
+        }
+        var dumps = JSON.stringify(data, function(key, value) {
+                if (key == '_id') {
+                    return undefined;
+                } else if (key == '_rev') {
+                    return undefined;
+                } else if (key == 'create_uid') {
+                    return undefined;
+                } else if (key == 'write_uid') {
+                    return undefined;
+                } else {
+                    return value;
+                }
+            });
+        return JSON.parse(dumps);
+    },
+    deepChildCopy: function(db, new_parent_uuid, template_uuid, parent_field, defaults, callback) {
         var self = this;
         self.search(db, [
             [
@@ -67835,7 +67883,7 @@ Ext.define('Ext.picker.Picker', {
                     // create copy
                     db.post(child, function(err, res) {
                         if (!err) {
-                            self.deepCopy(db, res.id, template_child_uuid, parent_field, defaults, operationCallback);
+                            self.deepChildCopy(db, res.id, template_child_uuid, parent_field, defaults, operationCallback);
                         } else {
                             operationCallback(err, res);
                         }
@@ -68058,12 +68106,12 @@ Ext.define('Ext.picker.Picker', {
     }
 }, 1, 0, 0, 0, 0, 0, [
     Ext.proxy,
-    'PouchDBDriver',
+    'PouchDBUtil',
     0,
-    'PouchDBDriver'
+    'DBUtil'
 ], 0));
 
-/*global Ext:false,PouchDB:false,PouchDBDriver:false*/
+/*global Ext:false,PouchDB:false,DBUtil:false*/
 (Ext.cmd.derive('Ext.data.reader.PouchDB', Ext.data.reader.Reader, {
     alternateClassName: 'Ext.data.PouchDBReader'
 }, 0, 0, 0, 0, [
@@ -68344,7 +68392,8 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 }
             }
         }
-        return new Model(data, doc._id);
+        var model = new Model(data, doc._id, doc);
+        return model;
     },
     /**
      * @private 
@@ -68401,7 +68450,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     // read document callback
     readDocument: function(uuid, callback) {
         var self = this;
-        var db = PouchDBDriver.getDB(self.getDatabase());
+        var db = DBUtil.getDB(self.getDatabase());
         db.get(uuid).then(function(doc) {
             var record = self.createRecord(doc);
             callback(null, record);
@@ -68412,7 +68461,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     // read function
     read: function(operation, callback, scope) {
         var self = this;
-        var db = PouchDBDriver.getDB(self.getDatabase());
+        var db = DBUtil.getDB(self.getDatabase());
         var param;
         var params = {
                 'include_docs': true
@@ -68520,12 +68569,12 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 complete();
             };
         // QUERY
-        PouchDBDriver.search(db, filter_domain, params, resultCallback);
+        DBUtil.search(db, filter_domain, params, resultCallback);
     },
     // update function
     update: function(operation, callback, scope) {
         var self = this;
-        var db = PouchDBDriver.getDB(self.getDatabase());
+        var db = DBUtil.getDB(self.getDatabase());
         operation.setStarted();
         var records = operation.getRecords();
         var operationCount = records.length + 1;
@@ -68567,7 +68616,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     // destroy
     destroy: function(operation, callback, scope) {
         var self = this;
-        var db = PouchDBDriver.getDB(self.getDatabase());
+        var db = DBUtil.getDB(self.getDatabase());
         operation.setStarted();
         var records = operation.getRecords();
         var operationCount = records.length + 1;
@@ -68601,6 +68650,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             'name',
             'code',
             'template',
+            'template_id',
             'parent_id',
             'dtype',
             'rtype',
@@ -68617,7 +68667,8 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             'vali',
             'valb',
             'vald',
-            'group'
+            'group',
+            'rule_ids'
         ],
         //       belongsTo: [{model:'Fclipboard.model.Partner', associationKey:'partner_id'}],
         identifier: 'uuid',
@@ -68729,7 +68780,13 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 ]
             ],
             resModel: 'res.partner'
-        }
+        },
+        deleteChecks: [
+            {
+                field: "partner_id",
+                message: "Ein verwendeter Partner kann nicht gelöscht werden!"
+            }
+        ]
     }
 }, 0, 0, 0, 0, 0, 0, [
     Fclipboard.model,
@@ -68974,18 +69031,13 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     id: 'mainView',
     config: {
         // **********************************************************
-        //  Defaults
-        // **********************************************************
-        title: 'Dokumente',
-        record: null,
-        // **********************************************************
         //  Navigation Bar
         // **********************************************************
         navigationBar: {
             items: [
                 {
                     xtype: 'button',
-                    id: 'deleteRecord',
+                    id: 'deleteRecordButton',
                     iconCls: 'trash',
                     align: 'right',
                     action: 'deleteRecord',
@@ -68993,50 +69045,26 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 },
                 {
                     xtype: 'button',
-                    id: 'saveViewButton',
+                    id: 'saveRecordButton',
                     text: 'Speichern',
                     align: 'right',
-                    action: 'saveView',
+                    action: 'saveRecord',
                     hidden: true
                 }
             ]
-        },
-        listeners: {
-            activeitemchange: function(view, newCard) {
-                var saveButton = view.down('button[action=saveView]');
-                var deleteButton = view.down('button[action=deleteRecord]');
-                if (newCard instanceof Fclipboard.view.FormView) {
-                    saveButton.show();
-                    var record = newCard.getRecord();
-                    if (newCard.getDeleteable() && record && !record.phantom) {
-                        deleteButton.show();
-                    } else {
-                        deleteButton.hide();
-                    }
-                } else if (newCard.getSaveHandler && newCard.getSaveHandler()) {
-                    saveButton.show();
-                } else {
-                    saveButton.hide();
-                    deleteButton.hide();
-                }
-            }
         },
         // **********************************************************
         // View Items
         // **********************************************************
         items: [
             {
+                title: 'Fclipboard',
                 xtype: 'tabpanel',
                 tabBarPosition: 'bottom',
                 id: 'mainPanel',
-                listeners: {
-                    activeitemchange: function(view, value, oldValue, opts) {
-                        Ext.getCmp("mainView").validateComponents();
-                    }
-                },
                 items: [
                     {
-                        title: 'Dokumente',
+                        title: 'Ablage',
                         id: 'itemTab',
                         iconCls: 'home',
                         items: [
@@ -69057,15 +69085,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                                         xtype: 'searchfield',
                                         placeholder: 'Suche',
                                         id: 'itemSearch',
-                                        flex: 1,
-                                        listeners: {
-                                            keyup: function(field, key, opts) {
-                                                Ext.getCmp('mainView').fireEvent('searchItem', field.getValue());
-                                            },
-                                            clearicontap: function() {
-                                                Ext.getCmp('mainView').fireEvent('searchItem', null);
-                                            }
-                                        }
+                                        flex: 1
                                     },
                                     {
                                         xtype: 'button',
@@ -69124,15 +69144,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                                         xtype: 'searchfield',
                                         placeholder: 'Suche',
                                         id: 'partnerSearch',
-                                        flex: 1,
-                                        listeners: {
-                                            keyup: function(field, key, opts) {
-                                                Ext.getCmp('mainView').fireEvent('searchPartner', field.getValue());
-                                            },
-                                            clearicontap: function() {
-                                                Ext.getCmp('mainView').fireEvent('searchPartner', null);
-                                            }
-                                        }
+                                        flex: 1
                                     },
                                     {
                                         xtype: 'button',
@@ -69174,7 +69186,7 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                                     },
                                     {
                                         xtype: 'button',
-                                        id: 'resetSync',
+                                        id: 'resetSyncButton',
                                         text: 'Zurücksetzen',
                                         align: 'left',
                                         action: 'resetSync'
@@ -69205,12 +69217,382 @@ Ext.define('Ext.data.identifier.LocalUuid', {
                 ]
             }
         ]
+    }
+}, 0, [
+    "main"
+], [
+    "component",
+    "container",
+    "navigationview",
+    "main"
+], {
+    "component": true,
+    "container": true,
+    "navigationview": true,
+    "main": true
+}, [
+    "widget.main"
+], 0, [
+    Fclipboard.view,
+    'Main'
+], 0));
+
+/*global Ext:false, futil:false, DBUtil:false*/
+(Ext.cmd.derive('Fclipboard.util.Config', Ext.Base, {
+    singleton: true,
+    alternateClassName: 'Config',
+    config: {
+        "searchDelay": 500,
+        "searchLimit": 100,
+        "maxRows": 10
     },
-    // init
     constructor: function(config) {
+        this.initConfig(config);
+    },
+    valueToString: function(val, vtype) {
+        if (!val) {
+            return null;
+        }
+        if (!vtype) {
+            return val.toString();
+        } else {
+            switch (vtype) {
+                case 'product_id':
+                    return val.get('name');
+                case 'partner_id':
+                    return val.get('name');
+                case 'pricelist_id':
+                    return val.get('name');
+                case 'valf':
+                    return futil.formatFloat(val);
+                default:
+                    return val.toString();
+            }
+        }
+    },
+    getDB: function() {
+        var db = DBUtil.getDB('fclipboard');
+        return db;
+    },
+    getLog: function() {
+        return Ext.getStore("LogStore");
+    },
+    testNumberInput: function(c) {
+        this.showNumberInput(c, 0, '');
+    },
+    showNumberInput: function(nextTo, val, info, handler, editHandler) {
         var self = this;
-        self.callParent(config);
-        var itemList = Ext.getCmp("itemList");
+        //check number view
+        if (!self.numberInputView) {
+            self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
+        }
+        // show
+        self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, info, handler, editHandler);
+    }
+}, 1, 0, 0, 0, 0, 0, [
+    Fclipboard.util,
+    'Config',
+    0,
+    'Config'
+], 0));
+
+/*global Ext:false*/
+(Ext.cmd.derive('Fclipboard.view.FormView', Ext.form.FormPanel, {
+    config: {
+        /**
+        *  handler for which 
+        *  handles saving
+        */
+        saveHandler: null,
+        /**
+        * default editable
+        */
+        editable: true,
+        /**
+        * deleteable 
+        */
+        deleteable: false
+    }
+}, 0, [
+    "formview"
+], [
+    "component",
+    "container",
+    "panel",
+    "formpanel",
+    "formview"
+], {
+    "component": true,
+    "container": true,
+    "panel": true,
+    "formpanel": true,
+    "formview": true
+}, [
+    "widget.formview"
+], 0, [
+    Fclipboard.view,
+    'FormView'
+], 0));
+
+/*global Ext:false, DBUtil:false, PouchDB:false, openerplib:false, futil:false, Fclipboard:false, Config:false*/
+(Ext.cmd.derive('Fclipboard.controller.MainCtrl', Ext.app.Controller, {
+    config: {
+        refs: {
+            mainView: '#mainView',
+            saveRecordButton: '#saveRecordButton',
+            deleteRecordButton: '#deleteRecordButton'
+        },
+        control: {
+            saveRecordButton: {
+                tap: 'saveRecord'
+            },
+            deleteRecordButton: {
+                tap: 'deleteRecord'
+            },
+            mainView: {
+                initialize: 'mainViewInitialize',
+                reinitialize: 'mainViewInitialize',
+                activeitemchange: 'mainActiveItemChange'
+            }
+        }
+    },
+    init: function() {
+        var self = this;
+        self.callParent(arguments);
+    },
+    mainActiveItemChange: function(view, newCard) {
+        if (newCard instanceof Fclipboard.view.FormView) {
+            this.getSaveRecordButton().show();
+            var record = newCard.getRecord();
+            if (newCard.getDeleteable() && record && !record.phantom) {
+                this.getDeleteRecordButton().show();
+            } else {
+                this.getDeleteRecordButton().hide();
+            }
+        } else if (newCard.getSaveHandler && newCard.getSaveHandler()) {
+            this.getSaveRecordButton().show();
+        } else {
+            this.getSaveRecordButton().hide();
+            this.getDeleteRecordButton().hide();
+        }
+    },
+    mainViewInitialize: function() {
+        var self = this;
+        Config.getDB().info(function(err, info) {
+            if (!err) {
+                var infoStr = JSON.stringify(info, null, 2);
+                Config.getLog().info(infoStr);
+            } else {
+                Config.getLog().error(err);
+            }
+        });
+    },
+    saveRecord: function() {
+        var self = this;
+        //check double 
+        if (futil.isDoubleTap()) {
+            return;
+        }
+        var mainView = self.getMainView();
+        var view = mainView.getActiveItem();
+        // check fields for errors
+        var isValid = true;
+        var fields = view.query("field");
+        for (var i = 0; i < fields.length; i++) {
+            var field = fields[i];
+            var value = field.getValue();
+            if (value && typeof value == "string") {
+                value = field.getValue().trim();
+            }
+            if (field.getRequired() && (value === null || value === "")) {
+                fields[i].addCls('invalidField');
+                isValid = false;
+            } else {
+                fields[i].removeCls('invalidField');
+            }
+        }
+        if (!isValid) {
+            return;
+        }
+        futil.startLoading("Änderungen werden gespeichert...");
+        var record = null;
+        var reloadHandler = function(err, callback) {
+                futil.stopLoading();
+                var prevView = mainView.getPreviousItem();
+                var popCount = 1;
+                if (prevView && record) {
+                    // check field select record function
+                    var fieldSelectRecord = prevView.fieldSelectRecord || prevView.config.fieldSelectRecord;
+                    if (fieldSelectRecord) {
+                        fieldSelectRecord(record);
+                        popCount++;
+                    }
+                }
+                mainView.fireEvent("newRecord", record);
+                mainView.pop(popCount);
+                if (callback) {
+                    callback(err);
+                }
+            };
+        // if save handler exist use it
+        var saveHandler = view.saveHandler || view.config.saveHandler;
+        if (saveHandler) {
+            saveHandler(view, reloadHandler);
+        } else {
+            // otherwise try to store record
+            record = view.getRecord();
+            if (record !== null) {
+                var values = view.getValues();
+                record.set(values);
+                record.save({
+                    callback: function() {
+                        reloadHandler();
+                    }
+                });
+            } else {
+                reloadHandler();
+            }
+        }
+    },
+    deleteRecord: function() {
+        var self = this;
+        // check doubletap 
+        if (futil.isDoubleTap()) {
+            return;
+        }
+        var mainView = self.getMainView();
+        var view = self.getMainView().getActiveItem();
+        var record = view.getRecord();
+        if (record !== null) {
+            Ext.Msg.confirm('Löschen', 'Soll der ausgewählte Datensatz gelöscht werden?', function(choice) {
+                if (choice == 'yes') {
+                    var db = Config.getDB();
+                    var deleteChecks = null;
+                    try {
+                        deleteChecks = record.getDeleteChecks();
+                    } catch (err) {}
+                    var deleteFunc = function() {
+                            db.get(record.getId()).then(function(doc) {
+                                doc._deleted = true;
+                                db.put(doc).then(function() {
+                                    mainView.fireEvent("deletedRecord", record);
+                                    mainView.pop();
+                                });
+                            });
+                        };
+                    var checkDelete = function(index) {
+                            if (!deleteChecks || index >= deleteChecks.length) {
+                                deleteFunc();
+                            } else {
+                                var delCheck = deleteChecks[index];
+                                DBUtil.search(db, [
+                                    [
+                                        delCheck.field,
+                                        '=',
+                                        record.getId()
+                                    ]
+                                ], {
+                                    'include_docs': false
+                                }, function(err, res) {
+                                    if (!err && res.rows.length > 0) {
+                                        Ext.Msg.alert('Fehler', delCheck.message, Ext.emptyFn);
+                                    } else {
+                                        checkDelete(index + 1);
+                                    }
+                                });
+                            }
+                        };
+                    if (deleteChecks) {
+                        checkDelete(0);
+                    } else {
+                        deleteFunc();
+                    }
+                }
+            });
+        }
+    }
+}, 0, 0, 0, 0, 0, 0, [
+    Fclipboard.controller,
+    'MainCtrl'
+], 0));
+
+/*global Ext:false, PouchDB:false, DBUtil:false, Config:false, openerplib:false, futil:false, Fclipboard:false, markdown:false*/
+(Ext.cmd.derive('Fclipboard.controller.ItemTabCtrl', Ext.app.Controller, {
+    config: {
+        refs: {
+            mainView: '#mainView',
+            itemTab: '#itemTab',
+            itemList: '#itemList',
+            itemInfo: '#itemInfo',
+            parentItemButton: '#parentItemButton',
+            editItemButton: '#editItemButton',
+            newItemButton: '#newItemButton',
+            itemSearch: '#itemSearch'
+        },
+        control: {
+            mainView: {
+                deletedRecord: 'deletedRecord',
+                newRecord: 'newRecord',
+                reinitialize: 'reinitialize'
+            },
+            editItemButton: {
+                tap: 'editCurrentItem'
+            },
+            newItemButton: {
+                tap: 'newItem'
+            },
+            parentItemButton: {
+                tap: 'parentItem'
+            },
+            itemSearch: {
+                keyup: 'searchItemKeyUp',
+                clearicontap: 'searchItemClearIconTap'
+            },
+            itemTab: {
+                activate: 'itemTabActivate'
+            },
+            itemList: {
+                itemtap: 'selectItem',
+                select: 'itemListSelect',
+                initialize: 'itemListInitialize'
+            },
+            itemInfo: {
+                tap: 'editCurrentItem'
+            }
+        }
+    },
+    initState: function() {
+        this.path = [];
+        this.itemSearch = null;
+        this.pricelist = null;
+        this.record = null;
+    },
+    init: function() {
+        var self = this;
+        self.callParent(arguments);
+        self.initState();
+        self.itemSearchTask = Ext.create('Ext.util.DelayedTask', function() {
+            self.searchItems();
+        });
+    },
+    reinitialize: function() {
+        this.initState();
+        this.loadItem();
+    },
+    deletedRecord: function(record) {
+        if (this.record === record) {
+            this.parentItem();
+        }
+    },
+    newRecord: function(record) {
+        if (record === null || record instanceof Fclipboard.model.BasicItem) {
+            this.loadItem();
+        }
+    },
+    itemTabActivate: function(tab, options) {
+        this.loadItem();
+    },
+    itemListInitialize: function(itemList) {
         if (futil.screenWidth() < 700) {
             itemList.setItemTpl(Ext.create('Ext.XTemplate', '<tpl if="t==1">', '<div class="col-75">{code} {name} {uom}</div>', '<div class="col-25-right {cls}">{qty}</div>', '<div class="col-last"></div>', '<tpl else>', '{name}', '</tpl>', {
                 apply: function(values, parent) {
@@ -69241,70 +69623,1192 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             }));
         }
     },
-    validateComponents: function() {
+    itemListSelect: function(list, record) {
+        list.deselect(record);
+    },
+    searchItemKeyUp: function(field, key, opts) {
+        this.searchItemDelayed(field.getValue());
+    },
+    searchItemClearIconTap: function() {
+        this.searchItemDelayed(null);
+    },
+    searchItemDelayed: function(text) {
+        this.itemSearch = text;
+        this.itemSearchTask.delay(Config.getSearchDelay());
+    },
+    searchItems: function() {
+        var itemStore = Ext.StoreMgr.lookup("ItemStore");
+        // filter
+        if (!Ext.isEmpty(this.itemSearch)) {
+            itemStore.filter([
+                {
+                    property: 'name',
+                    value: this.itemSearch,
+                    anyMatch: true
+                }
+            ]);
+        } else {
+            itemStore.clearFilter();
+        }
+    },
+    loadItemChilds: function(callback) {
         var self = this;
-        var activeItem = Ext.getCmp("mainPanel").getActiveItem();
-        var title = activeItem.title || activeItem.getInitialConfig().title;
-        var itemRecord = self.getRecord();
-        var itemData = itemRecord && itemRecord.data || null;
-        var syncTabActive = (activeItem.getId() == "syncTab");
-        var itemTabActive = (activeItem.getId() == "itemTab");
-        var attachmentTabActive = (activeItem.getId() == "attachmentTab");
-        // override title with name from data       
-        if ((itemTabActive || attachmentTabActive) && itemData !== null) {
-            title = itemData.name;
-            if (attachmentTabActive) {
-                title = title + " / Anhänge ";
+        var domain = [
+                [
+                    'parent_id',
+                    '=',
+                    self.record !== null ? self.record.getId() : null
+                ]
+            ];
+        // define optiones      
+        var afterLoadCallbackCount = 0;
+        var options = {
+                params: {
+                    domain: domain
+                },
+                callback: function() {
+                    if (++afterLoadCallbackCount >= 2) {
+                        if (callback) {
+                            callback();
+                        }
+                        // filter if search was active
+                        if (!Ext.isEmpty(this.itemSearch)) {
+                            self.searchItems();
+                        }
+                    }
+                }
+            };
+        // load header item
+        var headerItemStore = Ext.StoreMgr.lookup("HeaderItemStore");
+        headerItemStore.load(options);
+        // load items
+        var itemStore = Ext.StoreMgr.lookup("ItemStore");
+        itemStore.load(options);
+    },
+    createItem: function(title, folder_only) {
+        var self = this;
+        // check doubletap 
+        if (futil.isDoubleTap()) {
+            return;
+        }
+        var formItems = [
+                {
+                    xtype: 'textfield',
+                    name: 'name',
+                    label: 'Name',
+                    required: true
+                }
+            ];
+        if (!folder_only) {
+            formItems.push({
+                xtype: 'listselect',
+                autoSelect: false,
+                name: 'template_id',
+                label: 'Vorlage',
+                navigationView: self.getMainView(),
+                store: 'ItemTemplateStore',
+                displayField: 'name'
+            });
+        }
+        formItems.push({
+            xtype: 'textareafield',
+            name: 'valt',
+            label: 'Beschreibung',
+            maxRows: Config.getMaxRows()
+        });
+        // new view         
+        var itemForm = Ext.create("Fclipboard.view.FormView", {
+                title: title || 'Neue Arbeitsmappe',
+                xtype: 'formview',
+                scrollable: false,
+                saveHandler: function(view, callback) {
+                    var db = Config.getDB();
+                    // get values
+                    var values = view.getValues();
+                    values.fdoo__ir_model = 'fclipboard.item';
+                    values.section = 20;
+                    values.dtype = null;
+                    values.parent_id = self.record !== null ? self.record.getId() : null;
+                    values.template = false;
+                    // get template
+                    var template_id = values.template_id;
+                    // post value function
+                    var postValues = function() {
+                            db.post(values, function(err, res) {
+                                if (!err) {
+                                    var newDocId = res.id;
+                                    if (template_id) {
+                                        // 
+                                        futil.startLoading("Erstelle Struktur");
+                                        //
+                                        DBUtil.deepChildCopy(db, res.id, template_id, "parent_id", {
+                                            template: false
+                                        }, function(err, res) {
+                                            //
+                                            futil.stopLoading();
+                                            //                            
+                                            if (!err && template_id) {
+                                                // open view if template was defined
+                                                callback(err, function() {
+                                                    self.selectId(newDocId, function() {
+                                                        self.editCurrentItem();
+                                                    });
+                                                });
+                                            } else {
+                                                // do error callback
+                                                callback(err);
+                                            }
+                                        });
+                                    } else {
+                                        // do normal callback
+                                        // and select new doc
+                                        callback(err, function() {
+                                            self.selectId(newDocId);
+                                        });
+                                    }
+                                } else {
+                                    // do error callback
+                                    callback(err);
+                                }
+                            });
+                        };
+                    // load template                
+                    if (template_id) {
+                        db.get(template_id).then(function(template) {
+                            // set values to copy
+                            values.rule_ids = DBUtil.createClone(template.rule_ids);
+                            // save and copy childs
+                            postValues();
+                        }).catch(function(err) {
+                            callback(err);
+                        });
+                    } else {
+                        //save 
+                        postValues();
+                    }
+                },
+                items: formItems,
+                editable: true,
+                deleteable: true
+            });
+        // show form
+        self.getMainView().push(itemForm);
+    },
+    loadItem: function(callback) {
+        var self = this;
+        // init
+        self.itemSearchTask.cancel();
+        self.itemSearch = null;
+        self.pricelist = null;
+        // validate components
+        var db = Config.getDB();
+        // final callback
+        var handleCallback = function(err) {
+                self.loadHeaderValues(self.record, function(items, values) {
+                    // build info
+                    var info = {};
+                    // build path                
+                    if (self.record) {
+                        var path = [];
+                        if (self.path) {
+                            Ext.each(self.path, function(parentItem) {
+                                path.push(parentItem.get('name'));
+                            });
+                        }
+                        path.push(self.record.get('name'));
+                        info.path = path.join(" / ");
+                        var text = self.record.get('valt');
+                        if (text) {
+                            try {
+                                info.text = markdown.toHTML(text);
+                            } catch (err) {
+                                info.text = text;
+                            }
+                        }
+                    }
+                    // create info cols                
+                    info.infoFields = [];
+                    info.allFields = [];
+                    Ext.each(items, function(item) {
+                        if (item.item) {
+                            var val = Config.valueToString(values[item.name], item.vtype);
+                            if (!val) {
+                                return;
+                            }
+                            var fieldData = {
+                                    "label": item.label,
+                                    "value": val
+                                };
+                            info.allFields.push(fieldData);
+                            if (!info.header) {
+                                info.header = val;
+                            } else {
+                                info.infoFields.push(fieldData);
+                            }
+                        }
+                    });
+                    if (!self.infoTemplate) {
+                        if (futil.screenHeight() < 700) {
+                            self.infoTemplate = new Ext.XTemplate('<tpl if="path">', '<div class="fclipboard-path">{path} <tpl if="header">({header})</tpl></div>', '</tpl>', '<tpl if="text">', '<div class="fclipboard-info">{text}</div>', '</tpl>');
+                        } else {
+                            self.infoTemplate = new Ext.XTemplate('<tpl if="path">', '<div class="fclipboard-path">{path}</div>', '</tpl>', '<tpl if="text">', '<div class="fclipboard-info">{text}</div>', '</tpl>', '<tpl if="header">', '<div class="fc-info-container">', '<tpl for="allFields">', '<div class="fc-info-field">', '<div class="fc-info-label">', '{label}', '</div>', '<div class="fc-info-value">', '{value}', '</div>', '</div>', '</tpl>', '<div class="fc-info-last"></div>', '</div>', '</tpl>');
+                        }
+                    }
+                    // set info
+                    var html = self.infoTemplate.apply(info);
+                    self.getItemInfo().setHtml(html);
+                    // update buttons
+                    var noRecord = self.record === null;
+                    self.getParentItemButton().setHidden(noRecord);
+                    self.getEditItemButton().setHidden(noRecord);
+                    // callback    
+                    if (callback) {
+                        callback();
+                    }
+                });
+            };
+        // check for callback
+        var afterLoadCallback = function() {
+                if (self.record) {
+                    // search pricelist
+                    DBUtil.findFirstChild(Config.getDB(), self.record.getId(), "parent_id", [
+                        [
+                            "rtype",
+                            "=",
+                            "pricelist_id"
+                        ]
+                    ], function(err, doc) {
+                        // check error or no pricelist found
+                        if (err || !doc || !doc.pricelist_id) {
+                            handleCallback(err);
+                        } else {
+                            db.get(doc.pricelist_id, function(err, pricelist) {
+                                // set pricelist
+                                self.pricelist = !err && pricelist || null;
+                                handleCallback(err);
+                            });
+                        }
+                    });
+                } else // if no record search no pricelist
+                {
+                    handleCallback();
+                }
+            };
+        // load childs
+        self.loadItemChilds(afterLoadCallback);
+    },
+    editCurrentItem: function() {
+        if (this.record) {
+            this.editItem(this.record);
+        }
+    },
+    selectId: function(itemId, callback) {
+        var self = this;
+        var store = Ext.getStore("ItemStore");
+        store.load({
+            params: {
+                domain: [
+                    [
+                        "_id",
+                        "=",
+                        itemId
+                    ]
+                ]
+            },
+            scope: self,
+            callback: function(itemRecords, operation, success) {
+                self.setItem(itemRecords[0], callback);
+            }
+        });
+    },
+    loadHeaderValues: function(record, callback) {
+        // if record is null,
+        // return
+        if (!record) {
+            callback(null, null);
+            return;
+        }
+        var self = this;
+        var db = Config.getDB();
+        var store = Ext.getStore("HeaderItemStore");
+        store.load({
+            params: {
+                domain: [
+                    [
+                        "parent_id",
+                        "=",
+                        record.getId()
+                    ]
+                ]
+            },
+            scope: self,
+            callback: function(itemRecords, operation, success) {
+                if (success) {
+                    var items = [
+                            {
+                                xtype: 'textfield',
+                                name: 'name',
+                                label: 'Name',
+                                required: true
+                            }
+                        ];
+                    var values = {
+                            name: record.get('name')
+                        };
+                    // check show view funciton
+                    var callbackBarrier = new futil.Barrier(function() {
+                            items.push({
+                                xtype: 'textareafield',
+                                name: 'valt',
+                                label: 'Beschreibung',
+                                maxRows: Config.getMaxRows()
+                            });
+                            callback(items, values);
+                        });
+                    // build mask                    
+                    Ext.each(itemRecords, function(itemRecord) {
+                        var name = itemRecord.getId();
+                        var data = itemRecord.getData();
+                        var dtype = data.dtype;
+                        var field = null;
+                        var vtype = null;
+                        if (dtype) {
+                            switch (dtype) {
+                                case "i":
+                                    field = {
+                                        xtype: 'numberfield'
+                                    };
+                                    vtype = "vali";
+                                    values[name] = data.vali;
+                                    break;
+                                case "f":
+                                    field = {
+                                        xtype: 'textfield'
+                                    };
+                                    vtype = "valf";
+                                    values[name] = data.valf;
+                                    break;
+                                case "c":
+                                    field = {
+                                        xtype: 'textfield'
+                                    };
+                                    vtype = "valc";
+                                    values[name] = data.valc;
+                                    break;
+                                case "t":
+                                    field = {
+                                        xtype: 'textareafield'
+                                    };
+                                    vtype = "valt";
+                                    values[name] = data.valt;
+                                    break;
+                                case "b":
+                                    field = {
+                                        xtype: 'togglefield'
+                                    };
+                                    vtype = "valb";
+                                    values[name] = data.valb;
+                                    break;
+                                case "d":
+                                    field = {
+                                        xtype: 'datepickerfield'
+                                    };
+                                    vtype = "vald";
+                                    values[name] = data.vald;
+                                    break;
+                            }
+                        } else {
+                            var rtype = data.rtype;
+                            switch (rtype) {
+                                case "partner_id":
+                                    field = {
+                                        xtype: 'listselect',
+                                        autoSelect: false,
+                                        navigationView: self.getMainView(),
+                                        store: 'PartnerStore',
+                                        displayField: 'name',
+                                        title: data.name,
+                                        pickerToolbarItems: [
+                                            {
+                                                xtype: 'button',
+                                                iconCls: 'add',
+                                                align: 'right',
+                                                action: 'newPartner'
+                                            }
+                                        ]
+                                    };
+                                    vtype = "partner_id";
+                                    values[name] = data.partner_id;
+                                    break;
+                                case "pricelist_id":
+                                    field = {
+                                        xtype: 'listselect',
+                                        title: data.name,
+                                        autoSelect: false,
+                                        navigationView: self.getMainView(),
+                                        store: 'PricelistStore',
+                                        displayField: 'name'
+                                    };
+                                    vtype = "pricelist_id";
+                                    values[name] = data.pricelist_id;
+                                    break;
+                            }
+                        }
+                        // finalize field
+                        if (field) {
+                            field.name = name;
+                            field.label = data.name;
+                            field.item = data;
+                            field.vtype = vtype;
+                            if (data.required) {
+                                field.required = true;
+                            }
+                            items.push(field);
+                            // check if is an model value                                                    
+                            if (field.xtype == 'listselect' && values[name]) {
+                                var store = Ext.getStore(field.store);
+                                var proxy = store.getProxy();
+                                if (proxy instanceof Ext.proxy.PouchDB) {
+                                    // increment barrier
+                                    callbackBarrier.add();
+                                    proxy.readDocument(values[name], function(err, rec) {
+                                        values[name] = rec;
+                                        // test barrier
+                                        callbackBarrier.test();
+                                    });
+                                }
+                            }
+                        }
+                    });
+                    // test barrier
+                    callbackBarrier.test();
+                }
+            }
+        });
+    },
+    editItem: function(record, noselect) {
+        // edit only if non type
+        if (!record || record.dtype) {
+            return;
+        }
+        var self = this;
+        var db = Config.getDB();
+        var store = Ext.getStore("HeaderItemStore");
+        var showView = function(items, values) {
+                var view = Ext.create("Fclipboard.view.FormView", {
+                        title: values.name,
+                        record: record,
+                        scrollable: true,
+                        items: items,
+                        editable: true,
+                        deleteable: true,
+                        saveHandler: function(view, callback) {
+                            var newValues = view.getValues();
+                            var db = Config.getDB();
+                            db.get(record.getId()).then(function(doc) {
+                                //field update
+                                var updateItemIndex = 0;
+                                var updateItem = function() {
+                                        if (updateItemIndex < items.length) {
+                                            // get field data
+                                            var item = items[updateItemIndex++];
+                                            //var field = view.query("field[name='"+item.name+"']");
+                                            // check field exist and 
+                                            // item was from a record
+                                            if (item.item) {
+                                                db.get(item.name).then(function(doc) {
+                                                    doc[item.vtype] = newValues[item.name];
+                                                    // update 
+                                                    db.put(doc).then(function(res) {
+                                                        updateItem();
+                                                    }).catch(function(err) {
+                                                        callback(err);
+                                                    });
+                                                }).catch(function(err) {
+                                                    callback(err);
+                                                });
+                                            } else {
+                                                updateItem();
+                                            }
+                                        } else {
+                                            //***********************************
+                                            //finished
+                                            //***********************************
+                                            if (noselect) {
+                                                // if no select only load
+                                                self.loadItem(callback);
+                                            } else {
+                                                self.selectId(record.getId(), callback);
+                                            }
+                                        }
+                                    };
+                                // update name
+                                doc.name = newValues.name;
+                                doc.valt = newValues.valt;
+                                db.put(doc).then(function(res) {
+                                    updateItem();
+                                }).catch(function(err) {
+                                    callback(err);
+                                });
+                            }).catch(function(err) {
+                                callback(err);
+                            });
+                        }
+                    });
+                // set values
+                view.setValues(values);
+                // show view
+                self.getMainView().push(view);
+            };
+        self.loadHeaderValues(record, showView);
+    },
+    getMatchingRules: function() {
+        var self = this;
+        var matching = [];
+        if (self.record) {
+            var rules = self.record.get('rule_ids');
+            // get parent rules
+            if (!rules && self.path) {
+                Ext.each(self.path, function(parent_record) {
+                    var parent_rules = parent_record.get('rule_ids');
+                    if (parent_rules) {
+                        rules = parent_rules;
+                    }
+                });
+            }
+            // process rules
+            if (rules) {
+                Ext.each(rules, function(rule) {
+                    //TODO: real xpath
+                    var pathLength = self.path && self.path.length || 0;
+                    if (rule.xpath == "/" && pathLength === 0) {
+                        matching.push(rule);
+                    } else if (rule.xpath == "/*/" && pathLength == 1) {
+                        matching.push(rule);
+                    } else if (rule.xpath == "/*//" && pathLength >= 1) {
+                        matching.push(rule);
+                    }
+                });
             }
         }
-        Ext.getCmp('parentItemButton').setHidden(itemRecord === null);
-        Ext.getCmp('editItemButton').setHidden(itemRecord === null);
-        // reset title      
-        self.setTitle(title);
-        this.getNavigationBar().setTitle(this.getTitle());
+        return matching;
     },
-    pop: function() {
-        Ext.navigation.View.prototype.pop.apply(this, arguments);
-        this.validateComponents();
-    },
-    leave: function() {
+    setItem: function(item, callback) {
         var self = this;
-        self.pop();
-        var activeItem = Ext.getCmp("mainPanel").getActiveItem();
-        var itemTabActive = (activeItem.getId() == "itemTab");
-        if (itemTabActive) {
-            self.fireEvent('parentItem');
+        if (self.record !== null && self.record !== item && (item === null || item.getId() !== self.record.getId())) {
+            self.path.push(self.record);
+        }
+        self.record = item;
+        self.loadItem(callback);
+    },
+    selectItem: function(list, index, element, record) {
+        var self = this;
+        //check for product selection
+        if (record.get('rtype') == "product_id" && record.get('section') == 20) {
+            var store = Ext.getStore("ItemStore");
+            Config.showNumberInput(element, record.get('valf'), record.get('name'), // Handler 
+            function(view, newValue) {
+                if (newValue !== 0) {
+                    record.set('valf', newValue);
+                } else {
+                    store.remove(record);
+                }
+                store.sync();
+            }, // Edit Handler
+            function(view, newValue) {
+                self.editItem(record, true);
+            });
         } else {
-            self.fireEvent('doDataReload');
+            self.setItem(record);
+        }
+    },
+    parentItem: function() {
+        var parentRecord = null;
+        if (this.path.length > 0) {
+            parentRecord = this.path.pop();
+        }
+        this.record = parentRecord;
+        this.loadItem();
+    },
+    newItem: function() {
+        var self = this;
+        var rules = self.getMatchingRules();
+        //TODO real rule processing
+        if (rules.length == 1) {
+            var rule = rules[0];
+            if (rule.type == "folder") {
+                self.createItem(rule.name, true);
+            } else if (rule.type == "product") {
+                self.addProduct(rule.name);
+            }
+        } else {
+            if (!self.record || !self.pricelist) {
+                self.createItem();
+            } else {
+                var itemStore = Ext.getStore("ItemStore");
+                var productItems = [];
+                Ext.each(itemStore.data.all, function(item) {
+                    if (item.get('rtype') == 'product_id') {
+                        productItems.push(item);
+                    }
+                });
+                if (itemStore.data.all.length === 0) {
+                    var newItemPicker = Ext.create('Ext.Picker', {
+                            doneButton: 'Erstellen',
+                            cancelButton: 'Abbrechen',
+                            modal: true,
+                            slots: [
+                                {
+                                    name: 'option',
+                                    title: 'Element',
+                                    displayField: 'name',
+                                    valueField: 'option',
+                                    data: [
+                                        {
+                                            "name": "Produkt",
+                                            "option": 1
+                                        },
+                                        {
+                                            "name": "Ordner",
+                                            "option": 0
+                                        }
+                                    ]
+                                }
+                            ],
+                            listeners: {
+                                change: function(picker, button) {
+                                    var option = picker.getValue().option;
+                                    if (option === 1) {
+                                        self.addProduct();
+                                    } else {
+                                        self.createItem();
+                                    }
+                                }
+                            }
+                        });
+                    Ext.Viewport.add(newItemPicker);
+                    newItemPicker.show();
+                } else if (productItems.length === 0) {
+                    self.createItem();
+                } else {
+                    self.addProduct();
+                }
+            }
+        }
+    },
+    addProduct: function(title) {
+        var self = this;
+        // check doubletap 
+        if (futil.isDoubleTap()) {
+            return;
+        }
+        futil.startLoading("Lade Preisliste");
+        if (self.pricelist && self.record) {
+            var db = Config.getDB();
+            // order 
+            var order = {};
+            var orderItems = {};
+            //show pricelist view
+            var showPriceListView = function() {
+                    var view = Ext.create("Fclipboard.view.PricelistView", {
+                            title: title || self.pricelist.name,
+                            pricelist: self.pricelist,
+                            order: order,
+                            listeners: {
+                                "show": function() {
+                                    futil.stopLoading();
+                                }
+                            },
+                            saveHandler: function(view, callback) {
+                                var update = [];
+                                var newOrder = view.getOrder();
+                                // update create new                     
+                                Ext.iterate(newOrder, function(product_id, line) {
+                                    if (product_id in orderItems) {
+                                        var doc = orderItems[product_id];
+                                        if (doc.valf !== line.qty || doc.name !== line.name) {
+                                            if (line.qty === 0) {
+                                                // delete
+                                                update.push({
+                                                    _id: doc._id,
+                                                    _rev: doc._rev,
+                                                    _deleted: true
+                                                });
+                                            } else {
+                                                doc.name = line.name;
+                                                doc.valf = line.qty;
+                                                doc.code = line.code;
+                                                doc.valc = line.uom;
+                                                doc.sequence = line.sequence;
+                                                doc.group = line.category;
+                                                update.push(doc);
+                                            }
+                                        }
+                                    } else if (line.qty !== 0) {
+                                        update.push({
+                                            fdoo__ir_model: "fclipboard.item",
+                                            product_id: product_id,
+                                            name: line.name,
+                                            parent_id: self.record.getId(),
+                                            section: 20,
+                                            rtype: "product_id",
+                                            dtype: "f",
+                                            valf: line.qty,
+                                            code: line.code,
+                                            valc: line.uom,
+                                            sequence: line.sequence,
+                                            group: line.category
+                                        });
+                                    }
+                                });
+                                // update and do callback
+                                db.bulkDocs(update, function(err, res) {
+                                    callback(err);
+                                });
+                            }
+                        });
+                    self.getMainView().push(view);
+                };
+            // search current items
+            var store = Ext.getStore("ItemStore");
+            Ext.each(store.data.all, function(item) {
+                var doc = item.raw;
+                //create order line
+                order[doc.product_id] = {
+                    name: item.get('name'),
+                    qty: item.get('valf'),
+                    uom: item.get('valc'),
+                    code: item.get('code'),
+                    product_id: item.get('product_id'),
+                    sequence: item.get('sequence'),
+                    category: item.get('group')
+                };
+                orderItems[doc.product_id] = doc;
+            });
+            showPriceListView();
         }
     }
-}, 1, [
-    "main"
+}, 0, 0, 0, 0, 0, 0, [
+    Fclipboard.controller,
+    'ItemTabCtrl'
+], 0));
+
+/*global Ext:false, PouchDB:false, DBUtil:false, Config:false, openerplib:false, futil:false, Fclipboard:false*/
+(Ext.cmd.derive('Fclipboard.controller.PartnerTabCtrl', Ext.app.Controller, {
+    config: {
+        refs: {
+            mainView: '#mainView',
+            partnerTab: '#partnerTab',
+            partnerList: '#partnerList',
+            partnerSearch: '#partnerSearch'
+        },
+        control: {
+            'button[action=newPartner]': {
+                tap: 'newPartner'
+            },
+            mainView: {
+                newRecord: 'recordChange',
+                deletedRecord: 'recordChange'
+            },
+            partnerTab: {
+                activate: 'partnerTabActivate'
+            },
+            partnerSearch: {
+                keyup: 'partnerSearchKeyUp',
+                clearicontap: 'partnerClearIconTap'
+            },
+            partnerList: {
+                select: 'selectPartner',
+                initialize: 'initializeList'
+            }
+        }
+    },
+    init: function() {
+        var self = this;
+        self.callParent(arguments);
+        self.searchText = null;
+        self.partnerSearchTask = Ext.create('Ext.util.DelayedTask', function() {
+            self.searchPartner();
+        });
+    },
+    initializeList: function() {
+        this.getPartnerList().setItemTpl(Ext.create('Ext.XTemplate', '{name}<tpl if="infos"><div class="partner-info">{infos}</div></tpl>', {
+            apply: function(values, parent) {
+                // determine type
+                var addressLine = [];
+                if (values.street) {
+                    addressLine.push(values.street);
+                }
+                if (values.city) {
+                    if (values.zip) {
+                        addressLine.push(values.zip + " " + values.city);
+                    } else {
+                        addressLine.push(values.city);
+                    }
+                }
+                values.infos = addressLine.join(" - ");
+                return this.applyOut(values, [], parent).join('');
+            }
+        }));
+    },
+    recordChange: function(record) {
+        if (record instanceof Fclipboard.model.Partner) {
+            this.resetSearch();
+        }
+    },
+    partnerTabActivate: function(tab, options) {
+        this.resetSearch();
+    },
+    resetSearch: function() {
+        this.searchText = null;
+        this.getPartnerSearch().setValue(null);
+        this.searchPartner();
+    },
+    partnerClearIconTap: function() {
+        this.resetSearch();
+    },
+    partnerSearchKeyUp: function(field, key, opts) {
+        this.searchPartnerDelayed(field.getValue());
+    },
+    searchPartnerDelayed: function(text) {
+        this.searchText = text;
+        this.partnerSearchTask.delay(Config.getSearchDelay());
+    },
+    searchPartner: function(callback) {
+        var partnerStore = Ext.StoreMgr.lookup("PartnerStore");
+        var options = {
+                params: {
+                    limit: Config.getSearchLimit()
+                }
+            };
+        if (callback) {
+            options.callback = callback;
+        }
+        if (!Ext.isEmpty(this.searchText)) {
+            options.filters = [
+                {
+                    property: 'name',
+                    value: this.searchText,
+                    anyMatch: true
+                }
+            ];
+        }
+        //<a href="tel:18475555555">1-847-555-5555</a>
+        partnerStore.load(options);
+    },
+    newPartner: function() {
+        var newPartner = Ext.create('Fclipboard.model.Partner', {});
+        this.editPartner(newPartner);
+    },
+    editPartner: function(record) {
+        var self = this;
+        // check doubletap 
+        if (futil.isDoubleTap()) {
+            return;
+        }
+        self.getMainView().push({
+            title: 'Partner',
+            xtype: 'partnerform',
+            record: record,
+            deleteable: true
+        });
+    },
+    selectPartner: function(list, record) {
+        list.deselect(record);
+        this.editPartner(record);
+    }
+}, 0, 0, 0, 0, 0, 0, [
+    Fclipboard.controller,
+    'PartnerTabCtrl'
+], 0));
+
+/*global Ext:false*/
+(Ext.cmd.derive('Fclipboard.view.ConfigView', Fclipboard.view.FormView, {
+    config: {
+        scrollable: true,
+        items: [
+            {
+                xtype: 'fieldset',
+                title: 'Verbindung',
+                items: [
+                    {
+                        xtype: 'hiddenfield',
+                        name: '_rev',
+                        label: 'Version'
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'host',
+                        label: 'Server',
+                        required: true
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'port',
+                        label: 'Port',
+                        required: true
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'db',
+                        label: 'Datenbank',
+                        required: true
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'user',
+                        label: 'Benutzer',
+                        required: true
+                    },
+                    {
+                        xtype: 'passwordfield',
+                        name: 'password',
+                        label: 'Passwort',
+                        required: true
+                    }
+                ]
+            }
+        ]
+    }
+}, 0, [
+    "configform"
 ], [
     "component",
     "container",
-    "navigationview",
-    "main"
+    "panel",
+    "formpanel",
+    "formview",
+    "configform"
 ], {
     "component": true,
     "container": true,
-    "navigationview": true,
-    "main": true
+    "panel": true,
+    "formpanel": true,
+    "formview": true,
+    "configform": true
 }, [
-    "widget.main"
+    "widget.configform"
 ], 0, [
     Fclipboard.view,
-    'Main'
+    'ConfigView'
+], 0));
+
+/*global Ext:false, PouchDB:false, DBUtil:false, openerplib:false, futil:false, Config:false */
+(Ext.cmd.derive('Fclipboard.controller.SyncTabCtrl', Ext.app.Controller, {
+    config: {
+        refs: {
+            mainView: '#mainView',
+            syncButton: '#syncButton',
+            resetSync: '#resetSyncButton',
+            editConfig: '#editConfigButton'
+        },
+        control: {
+            syncButton: {
+                tap: 'sync'
+            },
+            editConfig: {
+                tap: 'editConfig'
+            },
+            resetSync: {
+                tap: 'resetSync'
+            }
+        }
+    },
+    init: function() {
+        var self = this;
+        self.callParent(arguments);
+        self.syncActive = false;
+    },
+    sync: function() {
+        var self = this;
+        //check double 
+        if (futil.isDoubleTap()) {
+            return;
+        }
+        if (!self.syncActive) {
+            self.syncActive = true;
+            // start dialog
+            futil.startLoading("Datenabgleich mit Server");
+            // clear log
+            var log = Config.getLog();
+            log.removeAll();
+            // define callback
+            var callback = function(err) {
+                    self.syncActive = false;
+                    futil.stopLoading();
+                    if (err) {
+                        if (err === 'Timeout') {
+                            log.error("Zeitüberschreitung bei Verbindung zu Server");
+                        } else if (err == 'Offline') {
+                            log.error("Es kann keine Verbindung zum Server hergestellt werden");
+                        } else {
+                            log.error(err);
+                        }
+                        log.warning("<b>Synchronisation mit Fehlern abgeschlossen!</b>");
+                    } else {
+                        log.info("<b>Synchronisation beendet!</b>");
+                    }
+                    self.getMainView().fireEvent('reinitialize');
+                };
+            // fetch config and sync
+            var db = Config.getDB();
+            db.get('_local/config', function(err, config) {
+                // check config
+                if (!err && !(config.host && config.port && config.user && config.db && config.password)) {
+                    err = "Ungültige Konfiguration";
+                }
+                if (!err) {
+                    log.info("Hochladen auf <b>" + config.host + ":" + config.port + "</b> mit Benutzer <b>" + config.user + "</b>");
+                    // reload after sync
+                    DBUtil.syncOdoo({
+                        access: config,
+                        stores: [
+                            Ext.getStore("PartnerStore"),
+                            Ext.getStore("BasicItemStore"),
+                            Ext.getStore("PricelistStore")
+                        ],
+                        actions: [
+                            {
+                                model: "fclipboard.item",
+                                field_id: "root_id",
+                                domain: [
+                                    [
+                                        "state",
+                                        "!=",
+                                        "release"
+                                    ],
+                                    [
+                                        "template",
+                                        "=",
+                                        false
+                                    ]
+                                ],
+                                action: "action_release"
+                            }
+                        ]
+                    }, log, callback);
+                } else {
+                    callback(err);
+                }
+            });
+        }
+    },
+    resetSync: function(nextTo) {
+        var self = this;
+        var log = Config.getLog();
+        log.removeAll();
+        var syncPopover = Ext.create('Ext.Panel', {
+                title: "Zurücksetzen",
+                floating: true,
+                hideOnMaskTap: true,
+                modal: true,
+                width: '300px',
+                defaults: {
+                    defaults: {
+                        xtype: 'button',
+                        margin: 10,
+                        flex: 1
+                    }
+                },
+                items: [
+                    {
+                        xtype: 'fieldset',
+                        title: 'Zurücksetzen',
+                        items: [
+                            {
+                                text: 'Synchronisation',
+                                handler: function() {
+                                    DBUtil.resetSync('fclipboard', function(err) {
+                                        if (err) {
+                                            log.error(err);
+                                        } else {
+                                            log.info("Sync-Daten zurückgesetzt!");
+                                        }
+                                        self.getMainView().fireEvent('reinitialize');
+                                        syncPopover.hide();
+                                    });
+                                }
+                            },
+                            {
+                                text: 'Datenbank',
+                                handler: function() {
+                                    Ext.Msg.confirm('Löschen', 'Soll die Datenbank wirklich gelöscht werden?', function(choice) {
+                                        var callback = function(err) {
+                                                if (err) {
+                                                    log.error(err);
+                                                }
+                                                syncPopover.hide();
+                                                log.info("Datenbank zurückgesetzt!");
+                                                self.getMainView().fireEvent('reinitialize');
+                                            };
+                                        if (choice == 'yes') {
+                                            Config.getDB().get('_local/config', function(err, doc) {
+                                                DBUtil.resetDB('fclipboard', function(err) {
+                                                    if (doc) {
+                                                        delete doc._rev;
+                                                        Config.getDB().put(doc, function(err) {
+                                                            callback(err);
+                                                        });
+                                                    } else {
+                                                        callback(err);
+                                                    }
+                                                });
+                                            });
+                                        } else {
+                                            syncPopover.hide();
+                                        }
+                                    });
+                                }
+                            }
+                        ]
+                    }
+                ]
+            });
+        if (nextTo) {
+            syncPopover.showBy(nextTo, 'tl-tr?', false);
+        } else {
+            syncPopover.show('pop');
+        }
+    },
+    editConfig: function(record) {
+        var self = this;
+        var db = Config.getDB();
+        var load = function(doc) {
+                var configForm = Ext.create("Fclipboard.view.ConfigView", {
+                        title: 'Konfiguration',
+                        xtype: 'configform',
+                        saveHandler: function(view, callback) {
+                            var newValues = view.getValues();
+                            newValues._id = '_local/config';
+                            db.put(newValues).then(function() {
+                                callback();
+                            });
+                        }
+                    });
+                configForm.setValues(doc);
+                self.getMainView().push(configForm);
+            };
+        db.get('_local/config').then(function(doc) {
+            load(doc);
+        }).catch(function(error) {
+            load({});
+        });
+    }
+}, 0, 0, 0, 0, 0, 0, [
+    Fclipboard.controller,
+    'SyncTabCtrl'
 ], 0));
 
 /*global Ext:false*, Fclipboard:false, futil*/
-(Ext.cmd.derive('Fclipboard.view.NumberView', Ext.Container, {
+(Ext.cmd.derive('Fclipboard.view.NumberView', Ext.Component, {
     cls: 'NumberView',
     config: {
         value: null,
         clsValue: 'NumberView',
         info: null,
-        clsInfo: 'NumberInfoView'
+        clsInfo: 'NumberInfoView',
+        handler: null,
+        scope: null
     },
     updateView: function() {
         var numText = this.getValue() || '';
@@ -69320,16 +70824,42 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     },
     updateInfo: function(info) {
         this.updateView();
+    },
+    initialize: function() {
+        var self = this;
+        self.callParent();
+        this.element.on({
+            scope: self,
+            tap: 'onTap'
+        });
+    },
+    onTap: function(e) {
+        this.fireAction('tap', [
+            this,
+            e
+        ], 'doTap');
+    },
+    doTap: function(me, e) {
+        var handler = me.getHandler(),
+            scope = me.getScope() || me;
+        if (!handler) {
+            return;
+        }
+        if (typeof handler == 'string') {
+            handler = scope[handler];
+        }
+        //this is done so if you hide the button in the handler, the tap event will not fire on the new element
+        //where the button was.
+        e.preventDefault();
+        handler.apply(scope, arguments);
     }
 }, 0, [
     "numberview"
 ], [
     "component",
-    "container",
     "numberview"
 ], {
     "component": true,
-    "container": true,
     "numberview": true
 }, [
     "widget.numberview"
@@ -69338,12 +70868,269 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     'NumberView'
 ], 0));
 
+/*global Ext:false*/
+(Ext.cmd.derive('Fclipboard.view.ListSelect', Ext.field.Select, {
+    config: {
+        /**
+         * @cfg {Object} Navigation View
+         */
+        navigationView: null,
+        /**
+         * @cfg {String} current Search
+         */
+        searchValue: null,
+        /**
+         * @cfg {String} value field
+         */
+        valueField: "id",
+        /**
+         * @cfg {String} title
+         */
+        title: "Auswahl",
+        /**
+         * handler if creation of new 
+         * records are allowed
+         */
+        pickerToolbarItems: null
+    },
+    showPicker: function() {
+        var self = this;
+        var navigationView = self.getNavigationView();
+        var store = self.getStore();
+        if (navigationView !== null && store !== null) {
+            var toolbarItems = [
+                    {
+                        xtype: 'searchfield',
+                        placeholder: 'Suche',
+                        flex: 1,
+                        listeners: {
+                            keyup: function(field, key, opts) {
+                                self.searchDelayed(field.getValue());
+                            },
+                            clearicontap: function() {
+                                self.searchDelayed(null);
+                            }
+                        }
+                    }
+                ];
+            // add additional items
+            var additionalToolbarItems = self.getPickerToolbarItems();
+            if (additionalToolbarItems) {
+                toolbarItems = toolbarItems.concat(additionalToolbarItems);
+            }
+            navigationView.push({
+                title: self.getTitle(),
+                newRecord: null,
+                xtype: 'container',
+                listeners: {
+                    scope: self,
+                    show: self.firstSearch
+                },
+                items: [
+                    {
+                        docked: 'top',
+                        xtype: 'toolbar',
+                        items: toolbarItems
+                    },
+                    {
+                        xtype: 'list',
+                        height: '100%',
+                        flex: 1,
+                        store: store,
+                        itemTpl: '{' + self.getDisplayField() + '}',
+                        listeners: {
+                            select: self.onListSelect,
+                            itemtap: self.onListTap,
+                            scope: self
+                        }
+                    }
+                ],
+                fieldSelectRecord: function(record) {
+                    self.setValue(record);
+                }
+            });
+        } else {
+            return self.callParent(arguments);
+        }
+    },
+    initialize: function() {
+        var self = this;
+        self.callParent(arguments);
+        self.searchTask = Ext.create('Ext.util.DelayedTask', function() {
+            self.search();
+        });
+    },
+    searchDelayed: function(searchValue) {
+        this.setSearchValue(searchValue);
+        this.searchTask.delay(500);
+    },
+    search: function() {
+        var self = this;
+        var storeInst = self.getStore();
+        var searchValue = self.getSearchValue();
+        var searchField = self.getDisplayField();
+        var options = {
+                params: {
+                    limit: 100
+                }
+            };
+        if (!Ext.isEmpty(searchValue)) {
+            options.filters = [
+                {
+                    property: searchField,
+                    value: self.searchValue
+                }
+            ];
+        }
+        storeInst.load(options);
+    },
+    firstSearch: function() {
+        this.search();
+    },
+    onListTap: function() {
+        var self = this;
+        var navigationView = self.getNavigationView();
+        if (navigationView !== null) {
+            navigationView.pop();
+        } else {
+            self.callParent(arguments);
+        }
+    },
+    applyValue: function(value) {
+        var record = value,
+            index, store;
+        //we call this so that the options configruation gets intiailized, so that a store exists, and we can
+        //find the correct value
+        this.getOptions();
+        store = this.getStore();
+        if ((value !== undefined && value !== null && !value.isModel) && store) {
+            if (typeof value === 'object') {
+                value = value[this.getValueField()];
+            }
+            index = store.find(this.getValueField(), value, null, null, null, true);
+            if (index == -1) {
+                index = store.find(this.getDisplayField(), value, null, null, null, true);
+            }
+            record = store.getAt(index);
+        }
+        return record;
+    }
+}, 0, [
+    "listselect"
+], [
+    "component",
+    "field",
+    "textfield",
+    "selectfield",
+    "listselect"
+], {
+    "component": true,
+    "field": true,
+    "textfield": true,
+    "selectfield": true,
+    "listselect": true
+}, [
+    "widget.listselect"
+], 0, [
+    Fclipboard.view,
+    'ListSelect'
+], 0));
+
+/*global Ext:false*/
+(Ext.cmd.derive('Fclipboard.view.PartnerView', Fclipboard.view.FormView, {
+    config: {
+        scrollable: true,
+        items: [
+            {
+                xtype: 'fieldset',
+                title: 'Kontakt',
+                items: [
+                    {
+                        xtype: 'textfield',
+                        name: 'name',
+                        label: 'Name',
+                        required: true
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'email',
+                        label: 'E-Mail'
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'mobile',
+                        label: 'Mobil'
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'phone',
+                        label: 'Telefon'
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'fax',
+                        label: 'Fax'
+                    }
+                ]
+            },
+            {
+                xtype: 'fieldset',
+                title: 'Adresse',
+                items: [
+                    {
+                        xtype: 'textfield',
+                        name: 'street',
+                        label: 'Straße'
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'street2',
+                        label: 'Straße2'
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'zip',
+                        label: 'PLZ'
+                    },
+                    {
+                        xtype: 'textfield',
+                        name: 'city',
+                        label: 'Ort'
+                    }
+                ]
+            }
+        ]
+    }
+}, 0, [
+    "partnerform"
+], [
+    "component",
+    "container",
+    "panel",
+    "formpanel",
+    "formview",
+    "partnerform"
+], {
+    "component": true,
+    "container": true,
+    "panel": true,
+    "formpanel": true,
+    "formview": true,
+    "partnerform": true
+}, [
+    "widget.partnerform"
+], 0, [
+    Fclipboard.view,
+    'PartnerView'
+], 0));
+
 /*global Ext:false, futil:false*/
 (Ext.cmd.derive('Fclipboard.view.NumberInputView', Ext.Panel, {
     config: {
         layout: 'vbox',
         firstReplace: true,
         handler: null,
+        editHandler: null,
         hideOnMaskTap: true,
         modal: true,
         width: '336px',
@@ -69380,6 +71167,11 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             {
                 fn: 'hideInput',
                 event: 'hide'
+            },
+            {
+                fn: 'editDetail',
+                event: 'tap',
+                delegate: 'numberview'
             }
         ],
         items: [
@@ -69561,7 +71353,6 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     initialize: function() {
         var self = this;
         self.callParent(arguments);
-        // get num field
         self.numField = self.query('numberview')[0];
     },
     addComma: function() {
@@ -69616,14 +71407,14 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             this.setHandler(null);
         }
     },
-    showBy: function(component, alignment, animation, value, callback) {
+    showBy: function(component, alignment, animation, value, handler, editHandler) {
         var self = this;
-        // set handler
         if (!value) {
             value = 0;
         }
         self.setValue(value);
-        self.setHandler(callback);
+        self.setHandler(handler);
+        self.setEditHandler(editHandler);
         // call parent        
         var successful = false;
         try {
@@ -69633,6 +71424,16 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             if (!successful) {
                 self.setHandler(null);
             }
+        }
+    },
+    editDetail: function() {
+        try {
+            var handler = this.getEditHandler();
+            if (handler) {
+                handler(this, this.getValue());
+            }
+        } finally {
+            this.hide();
         }
     }
 }, 0, [
@@ -69655,1700 +71456,12 @@ Ext.define('Ext.data.identifier.LocalUuid', {
 ], 0));
 
 /*global Ext:false, futil:false*/
-(Ext.cmd.derive('Fclipboard.view.PricelistView', Ext.Container, {
-    id: 'pricelistView',
-    config: {
-        searchValue: null,
-        pricelist: null,
-        saveHandler: null,
-        order: {},
-        title: 'Preisliste',
-        items: [
-            {
-                docked: 'top',
-                xtype: 'toolbar',
-                ui: 'neutral',
-                items: [
-                    {
-                        xtype: 'searchfield',
-                        placeholder: 'Suche',
-                        flex: 1,
-                        listeners: {
-                            keyup: function(field, key, opts) {
-                                Ext.getCmp('pricelistView').searchDelayed(field.getValue());
-                            },
-                            clearicontap: function() {
-                                Ext.getCmp('pricelistView').searchDelayed(null);
-                            }
-                        }
-                    }
-                ]
-            },
-            {
-                xtype: 'list',
-                height: '100%',
-                id: 'pricelist',
-                store: 'PricelistItemStore',
-                cls: 'PriceListItem',
-                scrollToTopOnRefresh: false,
-                grouped: true,
-                listeners: {
-                    itemtap: function(list, index, element, record) {
-                        Ext.getCmp('pricelistView').showNumberInput(element, record, index);
-                    },
-                    select: function(list, record) {
-                        list.deselect(record);
-                    }
-                }
-            }
-        ]
-    },
-    initialize: function() {
-        var self = this;
-        self.callParent(arguments);
-        var pricelist = Ext.getCmp("pricelist");
-        if (futil.screenWidth() < 700) {
-            pricelist.setItemTpl(Ext.create('Ext.XTemplate', '<div class="col-75 {cls}">{code} {name} {uom}</div>', '<div class="col-25-right {cls}">{qty}</div>', '<div class="col-last"></div>', {
-                apply: function(values, parent) {
-                    var line = self.getOrder()[values.product_id];
-                    var qty = 0;
-                    if (line) {
-                        qty = line.qty;
-                    }
-                    var cls = '';
-                    if (qty > 0) {
-                        cls = ' col-positive';
-                    }
-                    values.cls = cls;
-                    values.qty = futil.formatFloat(qty);
-                    return this.applyOut(values, [], parent).join('');
-                }
-            }));
-        } else {
-            pricelist.setItemTpl(Ext.create('Ext.XTemplate', '<div class="col-10 {cls}">{code}</div>', '<div class="col-70 {cls}">{name}</div>', '<div class="col-10 {cls}">{uom}</div>', '<div class="col-10-right {cls}">{qty}</div>', '<div class="col-last {cls}"></div>', {
-                apply: function(values, parent) {
-                    var line = self.getOrder()[values.product_id];
-                    var qty = 0;
-                    if (line) {
-                        qty = line.qty;
-                    }
-                    var cls = '';
-                    if (qty > 0) {
-                        cls = ' col-positive';
-                    }
-                    values.cls = cls;
-                    values.qty = futil.formatFloat(qty);
-                    return this.applyOut(values, [], parent).join('');
-                }
-            }));
-        }
-        //
-        self.searchTask = Ext.create('Ext.util.DelayedTask', function() {
-            self.search();
-        });
-    },
-    updatePricelist: function(priceList) {
-        //store
-        var store = Ext.getStore("PricelistItemStore");
-        if (priceList) {
-            store.setData(priceList.products);
-        } else {
-            store.setData([]);
-        }
-    },
-    searchDelayed: function(searchValue) {
-        this.setSearchValue(searchValue);
-        this.searchTask.delay(500);
-    },
-    search: function() {
-        var self = this;
-        var store = Ext.getStore("PricelistItemStore");
-        var searchValue = self.getSearchValue();
-        if (!Ext.isEmpty(searchValue)) {
-            store.filter([
-                {
-                    property: "name",
-                    value: searchValue,
-                    anyMatch: true
-                }
-            ]);
-        } else {
-            store.clearFilter();
-        }
-    },
-    showNumberInput: function(nextTo, record, index) {
-        var self = this;
-        var product_id = record.get('product_id');
-        var line = self.getOrder()[product_id];
-        var qty = line && line.qty || 0;
-        var name = record.get('name');
-        var validateNumberInput = function(numInput, newVal) {
-                self.getOrder()[product_id] = {
-                    name: record.get('name'),
-                    qty: newVal,
-                    uom: record.get('uom'),
-                    code: record.get('code'),
-                    category: record.get('category'),
-                    sequence: record.get('sequence')
-                };
-                var store = Ext.getStore("PricelistItemStore");
-                store.fireEvent('updaterecord', this, record, index, index, [], {});
-            };
-        /*
-        //show number view
-        if ( futil.screenWidth() < 700 ) {
-           if ( !self.numberInputView ) {
-                self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
-           }
-           self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, name, validateNumberInput);
-        } else {
-            if ( !self.numberInputView ) {
-                self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
-            }
-            self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, validateNumberInput);
-        }*/
-        if (!self.numberInputView) {
-            self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
-        }
-        self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, name, validateNumberInput);
-    }
-}, 0, [
-    "pricelist"
-], [
-    "component",
-    "container",
-    "pricelist"
-], {
-    "component": true,
-    "container": true,
-    "pricelist": true
-}, [
-    "widget.pricelist"
-], 0, [
-    Fclipboard.view,
-    'PricelistView'
-], 0));
-
-/*global Ext:false*/
-(Ext.cmd.derive('Fclipboard.view.FormView', Ext.form.FormPanel, {
-    config: {
-        /**
-        *  handler for which 
-        *  handles saving
-        */
-        saveHandler: null,
-        /**
-        * default editable
-        */
-        editable: true,
-        /**
-        * deleteable 
-        */
-        deleteable: false
-    }
-}, 0, [
-    "formview"
-], [
-    "component",
-    "container",
-    "panel",
-    "formpanel",
-    "formview"
-], {
-    "component": true,
-    "container": true,
-    "panel": true,
-    "formpanel": true,
-    "formview": true
-}, [
-    "widget.formview"
-], 0, [
-    Fclipboard.view,
-    'FormView'
-], 0));
-
-/*global Ext:false*/
-(Ext.cmd.derive('Fclipboard.view.ListSelect', Ext.field.Select, {
-    config: {
-        /**
-         * @cfg {Object} Navigation View
-         */
-        navigationView: null,
-        /**
-         * @cfg {String} current Search
-         */
-        searchValue: null,
-        /**
-         * @cfg {String} value field
-         */
-        valueField: "id",
-        /**
-         * @cfg {String} title
-         */
-        title: "Auswahl",
-        /**
-         * handler if creation of new 
-         * records are allowed
-         */
-        pickerToolbarItems: null
-    },
-    showPicker: function() {
-        var self = this;
-        var navigationView = self.getNavigationView();
-        var store = self.getStore();
-        if (navigationView !== null && store !== null) {
-            var toolbarItems = [
-                    {
-                        xtype: 'searchfield',
-                        placeholder: 'Suche',
-                        flex: 1,
-                        listeners: {
-                            keyup: function(field, key, opts) {
-                                self.searchDelayed(field.getValue());
-                            },
-                            clearicontap: function() {
-                                self.searchDelayed(null);
-                            }
-                        }
-                    }
-                ];
-            // add additional items
-            var additionalToolbarItems = self.getPickerToolbarItems();
-            if (additionalToolbarItems) {
-                toolbarItems = toolbarItems.concat(additionalToolbarItems);
-            }
-            navigationView.push({
-                title: self.getTitle(),
-                xtype: 'container',
-                listeners: {
-                    scope: self,
-                    show: self.firstSearch
-                },
-                items: [
-                    {
-                        docked: 'top',
-                        xtype: 'toolbar',
-                        items: toolbarItems
-                    },
-                    {
-                        xtype: 'list',
-                        height: '100%',
-                        flex: 1,
-                        store: store,
-                        itemTpl: '{' + self.getDisplayField() + '}',
-                        listeners: {
-                            select: self.onListSelect,
-                            itemtap: self.onListTap,
-                            scope: self
-                        }
-                    }
-                ]
-            });
-        } else {
-            return self.callParent(arguments);
-        }
-    },
-    initialize: function() {
-        var self = this;
-        self.callParent(arguments);
-        self.searchTask = Ext.create('Ext.util.DelayedTask', function() {
-            self.search();
-        });
-    },
-    searchDelayed: function(searchValue) {
-        this.setSearchValue(searchValue);
-        this.searchTask.delay(500);
-    },
-    search: function() {
-        var self = this;
-        var storeInst = self.getStore();
-        var searchValue = self.getSearchValue();
-        var searchField = self.getDisplayField();
-        var options = {
-                params: {
-                    limit: 100
-                }
-            };
-        if (!Ext.isEmpty(searchValue)) {
-            options.filters = [
-                {
-                    property: searchField,
-                    value: self.searchValue
-                }
-            ];
-        }
-        storeInst.load(options);
-    },
-    firstSearch: function() {
-        this.search();
-    },
-    onListTap: function() {
-        var self = this;
-        var navigationView = self.getNavigationView();
-        if (navigationView !== null) {
-            navigationView.pop();
-        } else {
-            self.callParent(arguments);
-        }
-    },
-    applyValue: function(value) {
-        var record = value,
-            index, store;
-        //we call this so that the options configruation gets intiailized, so that a store exists, and we can
-        //find the correct value
-        this.getOptions();
-        store = this.getStore();
-        if ((value !== undefined && value !== null && !value.isModel) && store) {
-            if (typeof value === 'object') {
-                value = value[this.getValueField()];
-            }
-            index = store.find(this.getValueField(), value, null, null, null, true);
-            if (index == -1) {
-                index = store.find(this.getDisplayField(), value, null, null, null, true);
-            }
-            record = store.getAt(index);
-        }
-        return record;
-    }
-}, 0, [
-    "listselect"
-], [
-    "component",
-    "field",
-    "textfield",
-    "selectfield",
-    "listselect"
-], {
-    "component": true,
-    "field": true,
-    "textfield": true,
-    "selectfield": true,
-    "listselect": true
-}, [
-    "widget.listselect"
-], 0, [
-    Fclipboard.view,
-    'ListSelect'
-], 0));
-
-/*global Ext:false*/
-(Ext.cmd.derive('Fclipboard.view.ConfigView', Fclipboard.view.FormView, {
-    config: {
-        scrollable: true,
-        items: [
-            {
-                xtype: 'fieldset',
-                title: 'Verbindung',
-                items: [
-                    {
-                        xtype: 'hiddenfield',
-                        name: '_rev',
-                        label: 'Version'
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'host',
-                        label: 'Server',
-                        required: true
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'port',
-                        label: 'Port',
-                        required: true
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'db',
-                        label: 'Datenbank',
-                        required: true
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'user',
-                        label: 'Benutzer',
-                        required: true
-                    },
-                    {
-                        xtype: 'passwordfield',
-                        name: 'password',
-                        label: 'Passwort',
-                        required: true
-                    }
-                ]
-            }
-        ]
-    }
-}, 0, [
-    "configform"
-], [
-    "component",
-    "container",
-    "panel",
-    "formpanel",
-    "formview",
-    "configform"
-], {
-    "component": true,
-    "container": true,
-    "panel": true,
-    "formpanel": true,
-    "formview": true,
-    "configform": true
-}, [
-    "widget.configform"
-], 0, [
-    Fclipboard.view,
-    'ConfigView'
-], 0));
-
-/*global Ext:false, PouchDB:false, PouchDBDriver:false, openerplib:false, futil:false*/
-(Ext.cmd.derive('Fclipboard.controller.Main', Ext.app.Controller, {
-    config: {
-        refs: {
-            mainView: '#mainView',
-            mainPanel: '#mainPanel',
-            partnerList: '#partnerList',
-            itemList: '#itemList',
-            itemInfo: '#itemInfo'
-        },
-        control: {
-            'button[action=editItem]': {
-                tap: 'editCurrentItem'
-            },
-            'button[action=newItem]': {
-                tap: 'newItem'
-            },
-            //tap: 'testNumberInput'
-            'button[action=saveView]': {
-                tap: 'saveRecord'
-            },
-            'button[action=newPartner]': {
-                tap: 'newPartner'
-            },
-            'button[action=parentItem]': {
-                tap: 'parentItem'
-            },
-            'button[action=sync]': {
-                tap: 'sync'
-            },
-            'button[action=editConfig]': {
-                tap: 'editConfig'
-            },
-            'button[action=deleteRecord]': {
-                tap: 'deleteRecord'
-            },
-            'button[action=resetSync]': {
-                tap: 'resetSync'
-            },
-            mainView: {
-                createItem: 'createItem',
-                parentItem: 'parentItem',
-                searchPartner: 'searchPartnerDelayed',
-                searchItem: 'searchItemDelayed',
-                doDataReload: 'dataReload',
-                initialize: 'addNotify',
-                editItem: 'editItem',
-                addProduct: 'addProduct',
-                showNumberInput: 'showNumberInput',
-                push: 'stopLoading'
-            },
-            partnerList: {
-                select: 'selectPartner'
-            },
-            itemList: {
-                itemtap: 'selectItem'
-            },
-            itemInfo: {
-                tap: 'editCurrentItem'
-            }
-        }
-    },
-    /*
-    launch: function() {
-        var self = this;
-        document.addEventListener('deviceready', Ext.bind(self.readyNotify, self));     
-    },*/
-    init: function() {
-        var self = this;
-        self.callParent(arguments);
-        self.path = [];
-        self.syncActive = false;
-        self.partnerSearch = null;
-        self.itemSearch = null;
-        self.pricelist = null;
-        self.doubleTap = false;
-        self.reloadPartner = true;
-        self.partnerSearchTask = Ext.create('Ext.util.DelayedTask', function() {
-            self.searchPartner();
-        });
-        self.itemSearchTask = Ext.create('Ext.util.DelayedTask', function() {
-            self.searchItems();
-        });
-    },
-    addNotify: function() {
-        var self = this;
-        self.getDB().info(function(err, info) {
-            if (!err) {
-                var infoStr = JSON.stringify(info, null, 2);
-                self.getLog().info(infoStr);
-            } else {
-                self.getLog().error(err);
-            }
-            self.loadRoot();
-        });
-    },
-    searchDelayed: function(task) {
-        task.delay(500);
-    },
-    searchPartnerDelayed: function(text) {
-        this.partnerSearch = text;
-        this.searchDelayed(this.partnerSearchTask);
-    },
-    searchItemDelayed: function(text) {
-        this.itemSearch = text;
-        this.searchDelayed(this.itemSearchTask);
-    },
-    searchPartner: function(callback) {
-        var partnerStore = Ext.StoreMgr.lookup("PartnerStore");
-        var options = {
-                params: {
-                    limit: 100
-                }
-            };
-        if (callback) {
-            options.callback = callback;
-        }
-        if (!Ext.isEmpty(this.partnerSearch)) {
-            options.filters = [
-                {
-                    property: 'name',
-                    value: this.partnerSearch
-                }
-            ];
-        }
-        partnerStore.load(options);
-    },
-    searchItems: function() {
-        var itemStore = Ext.StoreMgr.lookup("ItemStore");
-        // filter
-        if (!Ext.isEmpty(this.itemSearch)) {
-            itemStore.filter([
-                {
-                    property: 'name',
-                    value: this.itemSearch,
-                    anyMatch: true
-                }
-            ]);
-        } else {
-            itemStore.clearFilter();
-        }
-    },
-    loadItems: function(callback) {
-        var self = this;
-        var record = this.getMainView().getRecord();
-        var domain = [
-                [
-                    'parent_id',
-                    '=',
-                    record !== null ? record.getId() : null
-                ]
-            ];
-        // define optiones      
-        var afterLoadCallbackCount = 0;
-        var options = {
-                params: {
-                    domain: domain
-                },
-                callback: function() {
-                    if (++afterLoadCallbackCount >= 2) {
-                        if (callback) {
-                            callback();
-                        }
-                        // filter if search was active
-                        if (!Ext.isEmpty(this.itemSearch)) {
-                            self.searchItems();
-                        }
-                    }
-                }
-            };
-        // load header item
-        var headerItemStore = Ext.StoreMgr.lookup("HeaderItemStore");
-        headerItemStore.load(options);
-        // load items
-        var itemStore = Ext.StoreMgr.lookup("ItemStore");
-        itemStore.load(options);
-    },
-    startLoading: function(val) {
-        Ext.Viewport.setMasked({
-            xtype: 'loadmask',
-            message: val
-        });
-    },
-    stopLoading: function() {
-        Ext.Viewport.setMasked(false);
-    },
-    isDoubleTap: function(val) {
-        var self = this;
-        if (!self.doubleTap) {
-            self.doubleTap = true;
-            setTimeout(function() {
-                self.doubleTap = false;
-            }, 1000);
-            return false;
-        }
-        return true;
-    },
-    createItem: function() {
-        var self = this;
-        // check doubletap 
-        if (self.isDoubleTap()) {
-            return;
-        }
-        var mainView = self.getMainView();
-        var parentRec = mainView.getRecord();
-        // new view         
-        var itemForm = Ext.create("Fclipboard.view.FormView", {
-                title: 'Neues Dokument',
-                xtype: 'formview',
-                scrollable: false,
-                saveHandler: function(view, callback) {
-                    // get values
-                    var values = view.getValues();
-                    values.fdoo__ir_model = 'fclipboard.item';
-                    values.section = 20;
-                    values.dtype = null;
-                    values.parent_id = parentRec !== null ? parentRec.getId() : null;
-                    values.template = false;
-                    // get template
-                    var template_id = values.template_id;
-                    delete values.template_id;
-                    var db = self.getDB();
-                    db.post(values, function(err, res) {
-                        if (!err) {
-                            if (template_id) {
-                                //
-                                self.startLoading("Erstelle Struktur");
-                                //                           
-                                var newDocId = res.id;
-                                PouchDBDriver.deepCopy(db, res.id, template_id, "parent_id", {
-                                    template: false
-                                }, function(err, res) {
-                                    //
-                                    self.stopLoading();
-                                    //                            
-                                    if (!err && template_id) {
-                                        // open view if template was defined
-                                        callback(err, function() {
-                                            var item = Ext.getStore("ItemStore").getById(newDocId);
-                                            if (item) {
-                                                self.getMainView().fireEvent("editItem", item);
-                                            }
-                                        });
-                                    } else //self.editItem(item);                                        
-                                    {
-                                        // do normal callback
-                                        callback(err);
-                                    }
-                                });
-                                return;
-                            }
-                        }
-                        // no callback       
-                        callback(err);
-                    });
-                },
-                items: [
-                    {
-                        xtype: 'textfield',
-                        name: 'name',
-                        label: 'Name',
-                        required: true
-                    },
-                    {
-                        xtype: 'listselect',
-                        autoSelect: false,
-                        name: 'template_id',
-                        label: 'Vorlage',
-                        navigationView: self.getMainView(),
-                        store: 'ItemTemplateStore',
-                        displayField: 'name'
-                    }
-                ],
-                editable: true,
-                deleteable: true
-            });
-        self.getMainView().push(itemForm);
-    },
-    loadRoot: function(callback) {
-        this.getMainView().setRecord(null);
-        this.reloadPartner = true;
-        this.loadRecord(callback);
-    },
-    valueToString: function(val, vtype) {
-        if (!val) {
-            return null;
-        }
-        if (!vtype) {
-            return val.toString();
-        } else {
-            switch (vtype) {
-                case 'product_id':
-                    return val.get('name');
-                case 'partner_id':
-                    return val.get('name');
-                case 'pricelist_id':
-                    return val.get('name');
-                case 'valf':
-                    return futil.formatFloat(val);
-                default:
-                    return val.toString();
-            }
-        }
-    },
-    loadRecord: function(callback) {
-        var self = this;
-        // init
-        self.partnerSearchTask.cancel();
-        self.itemSearchTask.cancel();
-        self.partnerSearch = null;
-        self.itemSearch = null;
-        self.pricelist = null;
-        // validate components
-        self.getMainView().validateComponents();
-        var db = self.getDB();
-        var record = self.getMainView().getRecord();
-        // final callback
-        var handleCallback = function(err) {
-                self.loadHeaderValues(record, function(items, values) {
-                    // build info
-                    var info = {};
-                    // build path                
-                    if (record) {
-                        if (self.path && self.path.length > 0) {
-                            var path = [];
-                            Ext.each(self.path, function(parentRecord) {
-                                path.push(parentRecord.get('name'));
-                            });
-                            path.push(record.get('name'));
-                            info.path = path.join(" / ");
-                        }
-                    }
-                    // create info cols                
-                    info.infoFields = [];
-                    Ext.each(items, function(item) {
-                        if (item.item) {
-                            var val = self.valueToString(values[item.name], item.vtype);
-                            if (!val) {
-                                return;
-                            }
-                            if (!info.header) {
-                                info.header = val;
-                            } else {
-                                info.infoFields.push({
-                                    "label": item.label,
-                                    "value": val
-                                });
-                            }
-                        }
-                    });
-                    if (!self.infoTemplate) {
-                        if (futil.screenHeight() < 700) {
-                            self.infoTemplate = new Ext.XTemplate('<tpl if="path">', '<div class="fclipboard-path">{path}</div>', '</tpl>', '<tpl if="header">', '<div class="fc-info-container">', '<div class="fclipboard-path">', '{header}', '</div>', '<div class="fc-info-last"></div>', '</div>', '</tpl>');
-                        } else {
-                            self.infoTemplate = new Ext.XTemplate('<tpl if="path">', '<div class="fclipboard-path">{path}</div>', '</tpl>', '<tpl if="header">', '<div class="fc-info-container">', '<div class="fclipboard-path">', '{header}', '</div>', '<tpl for="infoFields">', '<div class="fc-info-field">', '<div class="fc-info-label">', '{label}: ', '</div>', '<div class="fc-info-value">', '{value}', '</div>', '</div>', '</tpl>', '<div class="fc-info-last"></div>', '</div>', '</tpl>');
-                        }
-                    }
-                    // set info            
-                    self.getItemInfo().setHtml(self.infoTemplate.apply(info));
-                    // callback    
-                    if (callback) {
-                        callback();
-                    }
-                });
-            };
-        // check for callback
-        var afterLoadCallback = function() {
-                if (record) {
-                    // search pricelist
-                    PouchDBDriver.findFirstChild(self.getDB(), record.getId(), "parent_id", [
-                        [
-                            "rtype",
-                            "=",
-                            "pricelist_id"
-                        ]
-                    ], function(err, doc) {
-                        // check error or no pricelist found
-                        if (err || !doc || !doc.pricelist_id) {
-                            handleCallback(err);
-                        } else {
-                            db.get(doc.pricelist_id, function(err, pricelist) {
-                                // set pricelist
-                                self.pricelist = !err && pricelist || null;
-                                handleCallback(err);
-                            });
-                        }
-                    });
-                } else // if no record search no pricelist
-                {
-                    handleCallback();
-                }
-            };
-        // load data
-        self.loadItems(afterLoadCallback);
-        // check reload partner flag
-        if (this.reloadPartner) {
-            this.reloadPartner = false;
-            this.searchPartner();
-        }
-    },
-    editCurrentItem: function() {
-        var mainView = this.getMainView();
-        var record = mainView.getRecord();
-        if (record) {
-            this.editItem(mainView.getRecord());
-        }
-    },
-    loadHeaderValues: function(record, callback) {
-        // if record is null,
-        // return
-        if (!record) {
-            callback(null, null);
-            return;
-        }
-        var self = this;
-        var db = self.getDB();
-        var store = Ext.getStore("HeaderItemStore");
-        store.load({
-            params: {
-                domain: [
-                    [
-                        "parent_id",
-                        "=",
-                        record.getId()
-                    ]
-                ]
-            },
-            scope: self,
-            callback: function(itemRecords, operation, success) {
-                if (success) {
-                    var items = [
-                            {
-                                xtype: 'textfield',
-                                name: 'name',
-                                label: 'Name',
-                                required: true
-                            }
-                        ];
-                    var values = {
-                            name: record.getData().name
-                        };
-                    // check show view funciton
-                    var callbackBarrier = new futil.Barrier(function() {
-                            callback(items, values);
-                        });
-                    // build mask                    
-                    Ext.each(itemRecords, function(itemRecord) {
-                        var name = itemRecord.getId();
-                        var data = itemRecord.getData();
-                        var dtype = data.dtype;
-                        var field = null;
-                        var vtype = null;
-                        if (dtype) {
-                            switch (dtype) {
-                                case "i":
-                                    field = {
-                                        xtype: 'numberfield'
-                                    };
-                                    vtype = "vali";
-                                    values[name] = data.vali;
-                                    break;
-                                case "f":
-                                    field = {
-                                        xtype: 'textfield'
-                                    };
-                                    vtype = "valf";
-                                    values[name] = data.valf;
-                                    break;
-                                case "c":
-                                    field = {
-                                        xtype: 'textfield'
-                                    };
-                                    vtype = "valc";
-                                    values[name] = data.valc;
-                                    break;
-                                case "t":
-                                    field = {
-                                        xtype: 'textareafield'
-                                    };
-                                    vtype = "valt";
-                                    values[name] = data.valt;
-                                    break;
-                                case "b":
-                                    field = {
-                                        xtype: 'togglefield'
-                                    };
-                                    vtype = "valb";
-                                    values[name] = data.valb;
-                                    break;
-                                case "d":
-                                    field = {
-                                        xtype: 'datepickerfield'
-                                    };
-                                    vtype = "vald";
-                                    values[name] = data.vald;
-                                    break;
-                            }
-                        } else {
-                            var rtype = data.rtype;
-                            switch (rtype) {
-                                case "partner_id":
-                                    field = {
-                                        xtype: 'listselect',
-                                        autoSelect: false,
-                                        navigationView: self.getMainView(),
-                                        store: 'PartnerStore',
-                                        displayField: 'name',
-                                        pickerToolbarItems: [
-                                            {
-                                                xtype: 'button',
-                                                iconCls: 'add',
-                                                align: 'right',
-                                                action: 'newPartner'
-                                            }
-                                        ]
-                                    };
-                                    vtype = "partner_id";
-                                    values[name] = data.partner_id;
-                                    break;
-                                case "pricelist_id":
-                                    field = {
-                                        xtype: 'listselect',
-                                        autoSelect: false,
-                                        navigationView: self.getMainView(),
-                                        store: 'PricelistStore',
-                                        displayField: 'name'
-                                    };
-                                    vtype = "pricelist_id";
-                                    values[name] = data.pricelist_id;
-                                    break;
-                            }
-                        }
-                        // finalize field
-                        if (field) {
-                            field.name = name;
-                            field.label = data.name;
-                            field.item = data;
-                            field.vtype = vtype;
-                            if (data.required) {
-                                field.required = true;
-                            }
-                            items.push(field);
-                            // check if is an model value                                                    
-                            if (field.xtype == 'listselect' && values[name]) {
-                                var store = Ext.getStore(field.store);
-                                var proxy = store.getProxy();
-                                if (proxy instanceof Ext.proxy.PouchDB) {
-                                    // increment barrier
-                                    callbackBarrier.add();
-                                    proxy.readDocument(values[name], function(err, rec) {
-                                        values[name] = rec;
-                                        // test barrier
-                                        callbackBarrier.test();
-                                    });
-                                }
-                            }
-                        }
-                    });
-                    // test barrier
-                    callbackBarrier.test();
-                }
-            }
-        });
-    },
-    editItem: function(record) {
-        // edit only if non type
-        if (!record || record.dtype) {
-            return;
-        }
-        var self = this;
-        var db = self.getDB();
-        var store = Ext.getStore("HeaderItemStore");
-        var showView = function(items, values) {
-                var view = Ext.create("Fclipboard.view.FormView", {
-                        title: values.name,
-                        record: record,
-                        scrollable: true,
-                        items: items,
-                        editable: true,
-                        deleteable: true,
-                        saveHandler: function(view, callback) {
-                            var newValues = view.getValues();
-                            var db = self.getDB();
-                            db.get(record.getId()).then(function(doc) {
-                                //field update
-                                var updateItemIndex = 0;
-                                var updateItem = function() {
-                                        if (updateItemIndex < items.length) {
-                                            // get field data
-                                            var item = items[updateItemIndex++];
-                                            //var field = view.query("field[name='"+item.name+"']");
-                                            // check field exist and 
-                                            // item was from a record
-                                            if (item.item) {
-                                                db.get(item.name).then(function(doc) {
-                                                    doc[item.vtype] = newValues[item.name];
-                                                    // update 
-                                                    db.put(doc).then(function(res) {
-                                                        updateItem();
-                                                    }).catch(function(err) {
-                                                        callback(err);
-                                                    });
-                                                }).catch(function(err) {
-                                                    callback(err);
-                                                });
-                                            } else {
-                                                updateItem();
-                                            }
-                                        } else {
-                                            callback();
-                                        }
-                                    };
-                                // update name
-                                doc.name = newValues.name;
-                                db.put(doc).then(function(res) {
-                                    updateItem();
-                                }).catch(function(err) {
-                                    callback(err);
-                                });
-                            }).catch(function(err) {
-                                callback(err);
-                            });
-                        }
-                    });
-                // set values
-                view.setValues(values);
-                // show view
-                self.getMainView().push(view);
-            };
-        self.loadHeaderValues(record, showView);
-    },
-    newPartner: function() {
-        this.reloadPartner = true;
-        var newPartner = Ext.create('Fclipboard.model.Partner', {});
-        this.editPartner(newPartner);
-    },
-    editPartner: function(record) {
-        var self = this;
-        self.reloadPartner = true;
-        // check doubletap 
-        if (self.isDoubleTap()) {
-            return;
-        }
-        self.getMainView().push({
-            title: 'Partner',
-            xtype: 'partnerform',
-            record: record,
-            deleteable: true
-        });
-    },
-    editConfig: function(record) {
-        var self = this;
-        var db = self.getDB();
-        var load = function(doc) {
-                var configForm = Ext.create("Fclipboard.view.ConfigView", {
-                        title: 'Konfiguration',
-                        xtype: 'configform',
-                        saveHandler: function(view, callback) {
-                            var newValues = view.getValues();
-                            newValues._id = '_local/config';
-                            db.put(newValues).then(function() {
-                                callback();
-                            });
-                        }
-                    });
-                configForm.setValues(doc);
-                self.getMainView().push(configForm);
-            };
-        db.get('_local/config').then(function(doc) {
-            load(doc);
-        }).catch(function(error) {
-            load({});
-        });
-    },
-    saveRecord: function() {
-        var self = this;
-        //check double 
-        if (self.isDoubleTap()) {
-            return;
-        }
-        var mainView = self.getMainView();
-        var view = mainView.getActiveItem();
-        // check fields for errors
-        var isValid = true;
-        var fields = view.query("field");
-        for (var i = 0; i < fields.length; i++) {
-            var field = fields[i];
-            var value = field.getValue();
-            if (value && typeof value == "string") {
-                value = field.getValue().trim();
-            }
-            if (field.getRequired() && (value === null || value === "")) {
-                fields[i].addCls('invalidField');
-                isValid = false;
-            } else {
-                fields[i].removeCls('invalidField');
-            }
-        }
-        if (!isValid) {
-            return;
-        }
-        // check for save handler
-        var saveHandler = null;
-        try {
-            saveHandler = view.getSaveHandler();
-        } catch (err) {}
-        self.startLoading("Dokument wird gespeichert...");
-        var reloadHandler = function(err, callback) {
-                self.stopLoading();
-                mainView.pop();
-                self.loadRecord(callback);
-            };
-        // if save handler exist use it
-        if (saveHandler) {
-            saveHandler(view, reloadHandler);
-        } else {
-            // otherwise try to store record
-            var record = view.getRecord();
-            if (record !== null) {
-                var values = view.getValues();
-                record.set(values);
-                record.save();
-            }
-            reloadHandler();
-        }
-    },
-    deleteRecord: function() {
-        var self = this;
-        // check doubletap 
-        if (self.isDoubleTap()) {
-            return;
-        }
-        var record = self.getMainView().getActiveItem().getRecord();
-        if (record !== null) {
-            Ext.Msg.confirm('Löschen', 'Soll der ausgewählte Datensatz gelöscht werden?', function(choice) {
-                if (choice == 'yes') {
-                    var db = self.getDB();
-                    db.get(record.getId()).then(function(doc) {
-                        doc._deleted = true;
-                        db.put(doc).then(function() {
-                            self.getMainView().leave();
-                        });
-                    });
-                }
-            });
-        }
-    },
-    selectPartner: function(list, record) {
-        list.deselect(record);
-        this.editPartner(record);
-    },
-    selectItem: function(list, index, element, record) {
-        var self = this;
-        //check for product selection
-        if (record.get('rtype') == "product_id" && record.get('section') == 20) {
-            var store = Ext.getStore("ItemStore");
-            self.showNumberInput(element, record.get('valf'), record.get('name'), function(view, newValue) {
-                if (newValue !== 0) {
-                    record.set('valf', newValue);
-                } else {
-                    store.remove(record);
-                }
-                store.sync();
-            });
-        } else {
-            var mainView = self.getMainView();
-            var lastRecord = mainView.getRecord();
-            if (lastRecord !== null) {
-                this.path.push(lastRecord);
-            }
-            mainView.setRecord(record);
-            self.loadRecord();
-        }
-    },
-    parentItem: function() {
-        var parentRecord = null;
-        if (this.path.length > 0) {
-            parentRecord = this.path.pop();
-        }
-        var mainView = this.getMainView();
-        mainView.setRecord(parentRecord);
-        this.loadRecord();
-    },
-    newItem: function() {
-        var self = this;
-        var mainView = self.getMainView();
-        var record = mainView.getRecord();
-        if (!record || !self.pricelist) {
-            self.createItem();
-        } else {
-            var itemStore = Ext.getStore("ItemStore");
-            var productItems = [];
-            Ext.each(itemStore.data.all, function(item) {
-                if (item.get('rtype') == 'product_id') {
-                    productItems.push(item);
-                }
-            });
-            if (itemStore.data.all.length === 0) {
-                var newItemPicker = Ext.create('Ext.Picker', {
-                        doneButton: 'Erstellen',
-                        cancelButton: 'Abbrechen',
-                        modal: true,
-                        slots: [
-                            {
-                                name: 'option',
-                                title: 'Element',
-                                displayField: 'name',
-                                valueField: 'option',
-                                data: [
-                                    {
-                                        "name": "Produkt",
-                                        "option": 1
-                                    },
-                                    {
-                                        "name": "Ordner",
-                                        "option": 0
-                                    }
-                                ]
-                            }
-                        ],
-                        listeners: {
-                            change: function(picker, button) {
-                                var option = picker.getValue().option;
-                                if (option === 1) {
-                                    self.addProduct();
-                                } else {
-                                    self.createItem();
-                                }
-                            }
-                        }
-                    });
-                Ext.Viewport.add(newItemPicker);
-                newItemPicker.show();
-            } else if (productItems.length === 0) {
-                self.createItem();
-            } else {
-                self.addProduct();
-            }
-        }
-    },
-    getDB: function() {
-        var db = PouchDBDriver.getDB('fclipboard');
-        return db;
-    },
-    getLog: function() {
-        return Ext.getStore("LogStore");
-    },
-    dataReload: function() {
-        this.loadRecord();
-    },
-    addProduct: function() {
-        var self = this;
-        // check doubletap 
-        if (self.isDoubleTap()) {
-            return;
-        }
-        self.startLoading("Lade Preisliste");
-        var record = this.getMainView().getRecord();
-        if (self.pricelist && record) {
-            var db = self.getDB();
-            // order 
-            var order = {};
-            var orderItems = {};
-            //show pricelist view
-            var showPriceListView = function() {
-                    var view = Ext.create("Fclipboard.view.PricelistView", {
-                            title: self.pricelist.name,
-                            pricelist: self.pricelist,
-                            order: order,
-                            saveHandler: function(view, callback) {
-                                var update = [];
-                                var newOrder = view.getOrder();
-                                // update create new                     
-                                Ext.iterate(newOrder, function(product_id, line) {
-                                    if (product_id in orderItems) {
-                                        var doc = orderItems[product_id];
-                                        if (doc.valf !== line.qty || doc.name !== line.name) {
-                                            if (line.qty === 0) {
-                                                // delete
-                                                update.push({
-                                                    _id: doc._id,
-                                                    _rev: doc._rev,
-                                                    _deleted: true
-                                                });
-                                            } else {
-                                                doc.name = line.name;
-                                                doc.valf = line.qty;
-                                                doc.code = line.code;
-                                                doc.valc = line.uom;
-                                                doc.sequence = line.sequence;
-                                                doc.group = line.category;
-                                                update.push(doc);
-                                            }
-                                        }
-                                    } else if (line.qty !== 0) {
-                                        update.push({
-                                            fdoo__ir_model: "fclipboard.item",
-                                            product_id: product_id,
-                                            name: line.name,
-                                            parent_id: record.getId(),
-                                            section: 20,
-                                            rtype: "product_id",
-                                            dtype: "f",
-                                            valf: line.qty,
-                                            code: line.code,
-                                            valc: line.uom,
-                                            sequence: line.sequence,
-                                            group: line.category
-                                        });
-                                    }
-                                });
-                                // update and do callback
-                                db.bulkDocs(update, function(err, res) {
-                                    callback(err);
-                                });
-                            }
-                        });
-                    self.getMainView().push(view);
-                };
-            // search current items
-            var store = Ext.getStore("ItemStore");
-            Ext.each(store.data.all, function(item) {
-                var doc = item.raw;
-                //create order line
-                order[doc.product_id] = {
-                    name: item.get('name'),
-                    qty: item.get('valf'),
-                    uom: item.get('valc'),
-                    code: item.get('code'),
-                    product_id: item.get('product_id'),
-                    sequence: item.get('sequence'),
-                    category: item.get('group')
-                };
-                orderItems[doc.product_id] = doc;
-            });
-            showPriceListView();
-        }
-    },
-    /** reload order items   
-            PouchDBDriver.search(db, [["parent_id","=",record.getId()],["section","=",20],["rtype","=","product_id"]], {'include_docs':true}, function(err, result) {
-                if ( err ) {
-                    return;
-                } 
-               
-                Ext.each(result.rows, function(row) {
-                    var doc = row.doc;
-                    //create order line
-                    order[doc.product_id]={
-                        name : doc.name,
-                        qty : doc.valf,
-                        uom : doc.valc,
-                        code : doc.code,
-                        product_id : doc.product_id,
-                        sequence: doc.sequence,
-                        category: doc.group
-                    };                    
-                    orderItems[doc.product_id]=doc;
-                });
-                               
-                showPriceListView();
-            });*/
-    sync: function() {
-        var self = this;
-        //check double 
-        if (self.isDoubleTap()) {
-            return;
-        }
-        if (!self.syncActive) {
-            self.syncActive = true;
-            // start dialog
-            self.startLoading("Datenabgleich mit Server");
-            // clear log
-            var log = self.getLog();
-            log.removeAll();
-            // define callback
-            var callback = function(err) {
-                    self.syncActive = false;
-                    self.stopLoading();
-                    if (err) {
-                        if (err === 'Timeout') {
-                            log.error("Zeitüberschreitung bei Verbindung zu Server");
-                        } else if (err == 'Offline') {
-                            log.error("Es kann keine Verbindung zum Server hergestellt werden");
-                        } else {
-                            log.error(err);
-                        }
-                        log.warning("<b>Synchronisation mit Fehlern abgeschlossen!</b>");
-                    } else {
-                        log.info("<b>Synchronisation beendet!</b>");
-                    }
-                    self.loadRoot();
-                };
-            // fetch config and sync
-            var db = self.getDB();
-            db.get('_local/config', function(err, config) {
-                // check config
-                if (!err && !(config.host && config.port && config.user && config.db && config.password)) {
-                    err = "Ungültige Konfiguration";
-                }
-                if (!err) {
-                    log.info("Hochladen auf <b>" + config.host + ":" + config.port + "</b> mit Benutzer <b>" + config.user + "</b>");
-                    // reload after sync
-                    PouchDBDriver.syncOdoo({
-                        access: config,
-                        stores: [
-                            Ext.getStore("PartnerStore"),
-                            Ext.getStore("BasicItemStore"),
-                            Ext.getStore("PricelistStore")
-                        ],
-                        actions: [
-                            {
-                                model: "fclipboard.item",
-                                field_id: "root_id",
-                                domain: [
-                                    [
-                                        "state",
-                                        "!=",
-                                        "release"
-                                    ],
-                                    [
-                                        "template",
-                                        "=",
-                                        false
-                                    ]
-                                ],
-                                action: "action_release"
-                            }
-                        ]
-                    }, log, callback);
-                } else {
-                    callback(err);
-                }
-            });
-        }
-    },
-    testNumberInput: function(c) {
-        this.showNumberInput(c, 0, '');
-    },
-    showNumberInput: function(nextTo, val, info, callback) {
-        var self = this;
-        /*                
-        if ( futil.screenWidth() < 700 ) {
-            //check number view
-            if ( !self.numberInputView ) {
-                self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
-            }
-            // show
-            self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, info, callback);
-        } else {
-            //check number view
-            if ( !self.numberInputView ) {
-                self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
-            }
-            // show
-            self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, callback);
-        }*/
-        //check number view
-        if (!self.numberInputView) {
-            self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
-        }
-        // show
-        self.numberInputView.showBy(nextTo, 'tl-tr?', false, val, info, callback);
-    },
-    resetSync: function(nextTo) {
-        var self = this;
-        var log = this.getLog();
-        log.removeAll();
-        var syncPopover = Ext.create('Ext.Panel', {
-                title: "Zurücksetzen",
-                floating: true,
-                hideOnMaskTap: true,
-                modal: true,
-                width: '300px',
-                defaults: {
-                    defaults: {
-                        xtype: 'button',
-                        margin: 10,
-                        flex: 1
-                    }
-                },
-                items: [
-                    {
-                        xtype: 'fieldset',
-                        title: 'Zurücksetzen',
-                        items: [
-                            {
-                                text: 'Synchronisation',
-                                handler: function() {
-                                    PouchDBDriver.resetSync('fclipboard', function(err) {
-                                        if (err) {
-                                            log.error(err);
-                                        } else {
-                                            log.info("Sync-Daten zurückgesetzt!");
-                                        }
-                                        self.loadRoot();
-                                        syncPopover.hide();
-                                    });
-                                }
-                            },
-                            {
-                                text: 'Datenbank',
-                                handler: function() {
-                                    Ext.Msg.confirm('Löschen', 'Soll die Datenbank wirklich gelöscht werden?', function(choice) {
-                                        var callback = function(err) {
-                                                if (err) {
-                                                    log.error(err);
-                                                }
-                                                syncPopover.hide();
-                                                log.info("Datenbank zurückgesetzt!");
-                                                self.getDB().info(function(err, info) {
-                                                    if (!err) {
-                                                        var infoStr = JSON.stringify(info, null, 2);
-                                                        self.getLog().info(infoStr);
-                                                    } else {
-                                                        self.getLog().error(err);
-                                                    }
-                                                    self.loadRoot();
-                                                });
-                                            };
-                                        if (choice == 'yes') {
-                                            self.getDB().get('_local/config', function(err, doc) {
-                                                PouchDBDriver.resetDB('fclipboard', function(err) {
-                                                    if (doc) {
-                                                        delete doc._rev;
-                                                        self.getDB().put(doc, function(err) {
-                                                            callback(err);
-                                                        });
-                                                    } else {
-                                                        callback(err);
-                                                    }
-                                                });
-                                            });
-                                        } else {
-                                            syncPopover.hide();
-                                        }
-                                    });
-                                }
-                            }
-                        ]
-                    }
-                ]
-            });
-        if (nextTo) {
-            syncPopover.showBy(nextTo, 'tl-tr?', false);
-        } else {
-            syncPopover.show('pop');
-        }
-    }
-}, 0, 0, 0, 0, 0, 0, [
-    Fclipboard.controller,
-    'Main'
-], 0));
-
-/*global Ext:false*/
-(Ext.cmd.derive('Fclipboard.view.PartnerView', Fclipboard.view.FormView, {
-    config: {
-        scrollable: true,
-        items: [
-            {
-                xtype: 'fieldset',
-                title: 'Kontakt',
-                items: [
-                    {
-                        xtype: 'textfield',
-                        name: 'name',
-                        label: 'Name',
-                        required: true
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'email',
-                        label: 'E-Mail'
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'mobile',
-                        label: 'Mobil'
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'phone',
-                        label: 'Telefon'
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'fax',
-                        label: 'Fax'
-                    }
-                ]
-            },
-            {
-                xtype: 'fieldset',
-                title: 'Adresse',
-                items: [
-                    {
-                        xtype: 'textfield',
-                        name: 'street',
-                        label: 'Straße'
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'street2',
-                        label: 'Straße2'
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'zip',
-                        label: 'PLZ'
-                    },
-                    {
-                        xtype: 'textfield',
-                        name: 'city',
-                        label: 'Ort'
-                    }
-                ]
-            }
-        ]
-    }
-}, 0, [
-    "partnerform"
-], [
-    "component",
-    "container",
-    "panel",
-    "formpanel",
-    "formview",
-    "partnerform"
-], {
-    "component": true,
-    "container": true,
-    "panel": true,
-    "formpanel": true,
-    "formview": true,
-    "partnerform": true
-}, [
-    "widget.partnerform"
-], 0, [
-    Fclipboard.view,
-    'PartnerView'
-], 0));
-
-/*global Ext:false, futil:false*/
 (Ext.cmd.derive('Fclipboard.view.SmallNumberInputView', Ext.Panel, {
     config: {
         layout: 'vbox',
         firstReplace: true,
         handler: null,
+        editHandler: null,
         hideOnMaskTap: true,
         modal: true,
         width: "236px",
@@ -71385,6 +71498,11 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             {
                 fn: 'hideInput',
                 event: 'hide'
+            },
+            {
+                fn: 'editDetail',
+                event: 'tap',
+                delegate: 'numberview'
             }
         ],
         items: [
@@ -71622,15 +71740,15 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             this.setHandler(null);
         }
     },
-    showBy: function(component, alignment, animation, value, info, callback) {
+    showBy: function(component, alignment, animation, value, info, handler, editHandler) {
         var self = this;
-        // set handler
         if (!value) {
             value = 0;
         }
         self.numField.setInfo(info || '');
         self.setValue(value);
-        self.setHandler(callback);
+        self.setHandler(handler);
+        self.setEditHandler(editHandler);
         // call parent        
         var successful = false;
         try {
@@ -71640,6 +71758,16 @@ Ext.define('Ext.data.identifier.LocalUuid', {
             if (!successful) {
                 self.setHandler(null);
             }
+        }
+    },
+    editDetail: function() {
+        try {
+            var handler = this.getEditHandler();
+            if (handler) {
+                handler(this, this.getValue());
+            }
+        } finally {
+            this.hide();
         }
     }
 }, 0, [
@@ -71660,6 +71788,1157 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     Fclipboard.view,
     'SmallNumberInputView'
 ], 0));
+
+/*global Ext:false, futil:false*/
+(Ext.cmd.derive('Fclipboard.view.PricelistView', Ext.Container, {
+    id: 'pricelistView',
+    config: {
+        searchValue: null,
+        pricelist: null,
+        saveHandler: null,
+        order: {},
+        title: 'Preisliste',
+        items: [
+            {
+                docked: 'top',
+                xtype: 'toolbar',
+                ui: 'neutral',
+                items: [
+                    {
+                        xtype: 'searchfield',
+                        placeholder: 'Suche',
+                        flex: 1,
+                        listeners: {
+                            keyup: function(field, key, opts) {
+                                Ext.getCmp('pricelistView').searchDelayed(field.getValue());
+                            },
+                            clearicontap: function() {
+                                Ext.getCmp('pricelistView').searchDelayed(null);
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                xtype: 'list',
+                height: '100%',
+                id: 'pricelist',
+                store: 'PricelistItemStore',
+                cls: 'PriceListItem',
+                scrollToTopOnRefresh: false,
+                grouped: true,
+                listeners: {
+                    itemtap: function(list, index, element, record) {
+                        Ext.getCmp('pricelistView').showNumberInput(element, record, index);
+                    },
+                    select: function(list, record) {
+                        list.deselect(record);
+                    }
+                }
+            }
+        ]
+    },
+    initialize: function() {
+        var self = this;
+        self.callParent(arguments);
+        var pricelist = Ext.getCmp("pricelist");
+        if (futil.screenWidth() < 700) {
+            pricelist.setItemTpl(Ext.create('Ext.XTemplate', '<div class="col-75 {cls}">{code} {iname} {uom}</div>', '<div class="col-25-right {cls}">{qty}</div>', '<div class="col-last"></div>', {
+                apply: function(values, parent) {
+                    var line = self.getOrder()[values.product_id];
+                    var qty = 0;
+                    var iname = values.name;
+                    if (line) {
+                        qty = line.qty;
+                        iname = line.name;
+                    }
+                    var cls = '';
+                    if (qty > 0) {
+                        cls = ' col-positive';
+                    }
+                    values.cls = cls;
+                    values.qty = futil.formatFloat(qty);
+                    values.iname = iname;
+                    return this.applyOut(values, [], parent).join('');
+                }
+            }));
+        } else {
+            pricelist.setItemTpl(Ext.create('Ext.XTemplate', '<div class="col-10 {cls}">{code}</div>', '<div class="col-70 {cls}">{iname}</div>', '<div class="col-10 {cls}">{uom}</div>', '<div class="col-10-right {cls}">{qty}</div>', '<div class="col-last {cls}"></div>', {
+                apply: function(values, parent) {
+                    var line = self.getOrder()[values.product_id];
+                    var qty = 0;
+                    var iname = values.name;
+                    if (line) {
+                        qty = line.qty;
+                        iname = line.name;
+                    }
+                    var cls = '';
+                    if (qty > 0) {
+                        cls = ' col-positive';
+                    }
+                    values.cls = cls;
+                    values.qty = futil.formatFloat(qty);
+                    values.iname = iname;
+                    return this.applyOut(values, [], parent).join('');
+                }
+            }));
+        }
+        //
+        self.searchTask = Ext.create('Ext.util.DelayedTask', function() {
+            self.search();
+        });
+    },
+    updatePricelist: function(priceList) {
+        //store
+        var store = Ext.getStore("PricelistItemStore");
+        if (priceList) {
+            store.setData(priceList.products);
+        } else {
+            store.setData([]);
+        }
+    },
+    searchDelayed: function(searchValue) {
+        this.setSearchValue(searchValue);
+        this.searchTask.delay(500);
+    },
+    search: function() {
+        var self = this;
+        var store = Ext.getStore("PricelistItemStore");
+        var searchValue = self.getSearchValue();
+        if (!Ext.isEmpty(searchValue)) {
+            store.filter([
+                {
+                    property: "name",
+                    value: searchValue,
+                    anyMatch: true
+                }
+            ]);
+        } else {
+            store.clearFilter();
+        }
+    },
+    showNumberInput: function(nextTo, record, index) {
+        var self = this;
+        var product_id = record.get('product_id');
+        var line = self.getOrder()[product_id];
+        var qty = line && line.qty || 0;
+        var name = line && line.name || record.get('name');
+        var validateNumberInput = function(numInput, newVal) {
+                self.getOrder()[product_id] = {
+                    name: name,
+                    qty: newVal,
+                    uom: record.get('uom'),
+                    code: record.get('code'),
+                    category: record.get('category'),
+                    sequence: record.get('sequence')
+                };
+                var store = Ext.getStore("PricelistItemStore");
+                store.fireEvent('updaterecord', this, record, index, index, [], {});
+            };
+        /*
+        //show number view
+        if ( futil.screenWidth() < 700 ) {
+           if ( !self.numberInputView ) {
+                self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
+           }
+           self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, name, validateNumberInput);
+        } else {
+            if ( !self.numberInputView ) {
+                self.numberInputView = Ext.create('Fclipboard.view.NumberInputView');
+            }
+            self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, validateNumberInput);
+        }*/
+        if (!self.numberInputView) {
+            self.numberInputView = Ext.create('Fclipboard.view.SmallNumberInputView');
+        }
+        self.numberInputView.showBy(nextTo, 'tl-tr?', false, qty, name, validateNumberInput);
+    }
+}, 0, [
+    "pricelist"
+], [
+    "component",
+    "container",
+    "pricelist"
+], {
+    "component": true,
+    "container": true,
+    "pricelist": true
+}, [
+    "widget.pricelist"
+], 0, [
+    Fclipboard.view,
+    'PricelistView'
+], 0));
+
+!function(a) {
+    function b() {
+        return "Markdown.mk_block( " + uneval(this.toString()) + ", " + uneval(this.trailing) + ", " + uneval(this.lineNumber) + " )";
+    }
+    function c() {
+        var a = require("util");
+        return "Markdown.mk_block( " + a.inspect(this.toString()) + ", " + a.inspect(this.trailing) + ", " + a.inspect(this.lineNumber) + " )";
+    }
+    function d(a) {
+        for (var b = 0,
+            c = -1; -1 !== (c = a.indexOf("\n", c + 1)); ) b++;
+        return b;
+    }
+    function e(a) {
+        return a.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    function f(a) {
+        if ("string" == typeof a)  {
+            return e(a);
+        }
+        
+        var b = a.shift(),
+            c = {},
+            d = [];
+        for (!a.length || "object" != typeof a[0] || a[0] instanceof Array || (c = a.shift()); a.length; ) d.push(f(a.shift()));
+        var g = "";
+        for (var h in c) g += " " + h + '="' + e(c[h]) + '"';
+        return "img" === b || "br" === b || "hr" === b ? "<" + b + g + "/>" : "<" + b + g + ">" + d.join("") + "</" + b + ">";
+    }
+    function g(a, b, c) {
+        var d;
+        c = c || {};
+        var e = a.slice(0);
+        "function" == typeof c.preprocessTreeNode && (e = c.preprocessTreeNode(e, b));
+        var f = o(e);
+        if (f) {
+            e[1] = {};
+            for (d in f) e[1][d] = f[d];
+            f = e[1];
+        }
+        if ("string" == typeof e)  {
+            return e;
+        }
+        
+        switch (e[0]) {
+            case "header":
+                e[0] = "h" + e[1].level , delete e[1].level;
+                break;
+            case "bulletlist":
+                e[0] = "ul";
+                break;
+            case "numberlist":
+                e[0] = "ol";
+                break;
+            case "listitem":
+                e[0] = "li";
+                break;
+            case "para":
+                e[0] = "p";
+                break;
+            case "markdown":
+                e[0] = "html" , f && delete f.references;
+                break;
+            case "code_block":
+                e[0] = "pre" , d = f ? 2 : 1;
+                var h = [
+                        "code"
+                    ];
+                h.push.apply(h, e.splice(d, e.length - d)) , e[d] = h;
+                break;
+            case "inlinecode":
+                e[0] = "code";
+                break;
+            case "img":
+                e[1].src = e[1].href , delete e[1].href;
+                break;
+            case "linebreak":
+                e[0] = "br";
+                break;
+            case "link":
+                e[0] = "a";
+                break;
+            case "link_ref":
+                e[0] = "a";
+                var i = b[f.ref];
+                if (!i)  {
+                    return f.original;
+                }
+                ;
+                delete f.ref , f.href = i.href , i.title && (f.title = i.title) , delete f.original;
+                break;
+            case "img_ref":
+                e[0] = "img";
+                var i = b[f.ref];
+                if (!i)  {
+                    return f.original;
+                }
+                ;
+                delete f.ref , f.src = i.href , i.title && (f.title = i.title) , delete f.original;
+        }
+        if (d = 1 , f) {
+            for (var j in e[1]) {
+                d = 2;
+                break;
+            }
+            1 === d && e.splice(d, 1);
+        }
+        for (; d < e.length; ++d) e[d] = g(e[d], b, c);
+        return e;
+    }
+    function h(a) {
+        for (var b = o(a) ? 2 : 1; b < a.length; ) "string" == typeof a[b] ? b + 1 < a.length && "string" == typeof a[b + 1] ? a[b] += a.splice(b + 1, 1)[0] : ++b : (h(a[b]) , ++b);
+    }
+    function i(a, b) {
+        function c(a) {
+            this.len_after = a , this.name = "close_" + b;
+        }
+        var d = a + "_state",
+            e = "strong" === a ? "em_state" : "strong_state";
+        return function(f) {
+            if (this[d][0] === b)  {
+                return this[d].shift() , [
+                    f.length,
+                    new c(f.length - b.length)
+                ];
+            }
+            
+            var g = this[e].slice(),
+                h = this[d].slice();
+            this[d].unshift(b);
+            var i = this.processInline(f.substr(b.length)),
+                j = i[i.length - 1];
+            if (this[d].shift() , j instanceof c) {
+                i.pop();
+                var k = f.length - j.len_after;
+                return [
+                    k,
+                    [
+                        a
+                    ].concat(i)
+                ];
+            }
+            return this[e] = g , this[d] = h , [
+                b.length,
+                b
+            ];
+        };
+    }
+    function j(a) {
+        for (var b = a.split(""),
+            c = [
+                ""
+            ],
+            d = !1; b.length; ) {
+            var e = b.shift();
+            switch (e) {
+                case " ":
+                    d ? c[c.length - 1] += e : c.push("");
+                    break;
+                case "'":
+                case '"':
+                    d = !d;
+                    break;
+                case "\\":
+                    e = b.shift();
+                default:
+                    c[c.length - 1] += e;
+            }
+        }
+        return c;
+    }
+    var k = {};
+    k.mk_block = function(a, d, e) {
+        1 === arguments.length && (d = "\n\n");
+        var f = new String(a);
+        return f.trailing = d , f.inspect = c , f.toSource = b , void 0 !== e && (f.lineNumber = e) , f;
+    };
+    var l = k.isArray = Array.isArray || function(a) {
+            return "[object Array]" === Object.prototype.toString.call(a);
+        };
+    k.forEach = Array.prototype.forEach ? function(a, b, c) {
+        return a.forEach(b, c);
+    } : function(a, b, c) {
+        for (var d = 0; d < a.length; d++) b.call(c || a, a[d], d, a);
+    } , k.isEmpty = function(a) {
+        for (var b in a) if (hasOwnProperty.call(a, b))  {
+            return !1;
+        }
+        
+        return !0;
+    } , k.extract_attr = function(a) {
+        return l(a) && a.length > 1 && "object" == typeof a[1] && !l(a[1]) ? a[1] : void 0;
+    };
+    var m = function(a) {
+            switch (typeof a) {
+                case "undefined":
+                    this.dialect = m.dialects.Gruber;
+                    break;
+                case "object":
+                    this.dialect = a;
+                    break;
+                default:
+                    if (!(a in m.dialects))  {
+                        throw new Error("Unknown Markdown dialect '" + String(a) + "'");
+                    }
+                    ;
+                    this.dialect = m.dialects[a];
+            }
+            this.em_state = [] , this.strong_state = [] , this.debug_indent = "";
+        };
+    m.dialects = {};
+    var n = m.mk_block = k.mk_block,
+        l = k.isArray;
+    m.parse = function(a, b) {
+        var c = new m(b);
+        return c.toTree(a);
+    } , m.prototype.split_blocks = function(a) {
+        a = a.replace(/(\r\n|\n|\r)/g, "\n");
+        var b,
+            c = /([\s\S]+?)($|\n#|\n(?:\s*\n|$)+)/g,
+            e = [],
+            f = 1;
+        for (null !== (b = /^(\s*\n)/.exec(a)) && (f += d(b[0]) , c.lastIndex = b[0].length); null !== (b = c.exec(a)); ) "\n#" === b[2] && (b[2] = "\n" , c.lastIndex--) , e.push(n(b[1], b[2], f)) , f += d(b[0]);
+        return e;
+    } , m.prototype.processBlock = function(a, b) {
+        var c = this.dialect.block,
+            d = c.__order__;
+        if ("__call__" in c)  {
+            return c.__call__.call(this, a, b);
+        }
+        
+        for (var e = 0; e < d.length; e++) {
+            var f = c[d[e]].call(this, a, b);
+            if (f)  {
+                return (!l(f) || f.length > 0 && !l(f[0])) && this.debug(d[e], "didn't return a proper array") , f;
+            }
+            
+        }
+        return [];
+    } , m.prototype.processInline = function(a) {
+        return this.dialect.inline.__call__.call(this, String(a));
+    } , m.prototype.toTree = function(a, b) {
+        var c = a instanceof Array ? a : this.split_blocks(a),
+            d = this.tree;
+        try {
+            for (this.tree = b || this.tree || [
+                "markdown"
+            ]; c.length; ) {
+                var e = this.processBlock(c.shift(), c);
+                e.length && this.tree.push.apply(this.tree, e);
+            }
+            return this.tree;
+        } finally {
+            b && (this.tree = d);
+        }
+    } , m.prototype.debug = function() {
+        var a = Array.prototype.slice.call(arguments);
+        a.unshift(this.debug_indent) , "undefined" != typeof print && print.apply(print, a) , "undefined" != typeof console && "undefined" != typeof console.log && console.log.apply(null, a);
+    } , m.prototype.loop_re_over_block = function(a, b, c) {
+        for (var d,
+            e = b.valueOf(); e.length && null !== (d = a.exec(e)); ) e = e.substr(d[0].length) , c.call(this, d);
+        return e;
+    } , m.buildBlockOrder = function(a) {
+        var b = [];
+        for (var c in a) "__order__" !== c && "__call__" !== c && b.push(c);
+        a.__order__ = b;
+    } , m.buildInlinePatterns = function(a) {
+        var b = [];
+        for (var c in a) if (!c.match(/^__.*__$/)) {
+            var d = c.replace(/([\\.*+?|()\[\]{}])/g, "\\$1").replace(/\n/, "\\n");
+            b.push(1 === c.length ? d : "(?:" + d + ")");
+        }
+        b = b.join("|") , a.__patterns__ = b;
+        var e = a.__call__;
+        a.__call__ = function(a, c) {
+            return void 0 !== c ? e.call(this, a, c) : e.call(this, a, b);
+        };
+    };
+    var o = k.extract_attr;
+    m.renderJsonML = function(a, b) {
+        b = b || {} , b.root = b.root || !1;
+        var c = [];
+        if (b.root)  {
+            c.push(f(a));
+        }
+        else  {
+            for (a.shift() , !a.length || "object" != typeof a[0] || a[0] instanceof Array || a.shift(); a.length; ) c.push(f(a.shift()));
+        }
+        
+        return c.join("\n\n");
+    } , m.toHTMLTree = function(a, b, c) {
+        "string" == typeof a && (a = this.parse(a, b));
+        var d = o(a),
+            e = {};
+        d && d.references && (e = d.references);
+        var f = g(a, e, c);
+        return h(f) , f;
+    } , m.toHTML = function(a, b, c) {
+        var d = this.toHTMLTree(a, b, c);
+        return this.renderJsonML(d);
+    };
+    var p = {};
+    p.inline_until_char = function(a, b) {
+        for (var c = 0,
+            d = []; ; ) {
+            if (a.charAt(c) === b)  {
+                return c++ , [
+                    c,
+                    d
+                ];
+            }
+            
+            if (c >= a.length)  {
+                return null;
+            }
+            
+            var e = this.dialect.inline.__oneElement__.call(this, a.substr(c));
+            c += e[0] , d.push.apply(d, e.slice(1));
+        }
+    } , p.subclassDialect = function(a) {
+        function b() {}
+        function c() {}
+        return b.prototype = a.block , c.prototype = a.inline , {
+            block: new b(),
+            inline: new c()
+        };
+    };
+    var q = k.forEach,
+        o = k.extract_attr,
+        n = k.mk_block,
+        r = k.isEmpty,
+        s = p.inline_until_char,
+        t = {
+            block: {
+                atxHeader: function(a, b) {
+                    var c = a.match(/^(#{1,6})\s*(.*?)\s*#*\s*(?:\n|$)/);
+                    if (!c)  {
+                        return void 0;
+                    }
+                    
+                    var d = [
+                            "header",
+                            {
+                                level: c[1].length
+                            }
+                        ];
+                    return Array.prototype.push.apply(d, this.processInline(c[2])) , c[0].length < a.length && b.unshift(n(a.substr(c[0].length), a.trailing, a.lineNumber + 2)) , [
+                        d
+                    ];
+                },
+                setextHeader: function(a, b) {
+                    var c = a.match(/^(.*)\n([-=])\2\2+(?:\n|$)/);
+                    if (!c)  {
+                        return void 0;
+                    }
+                    
+                    var d = "=" === c[2] ? 1 : 2,
+                        e = [
+                            "header",
+                            {
+                                level: d
+                            },
+                            c[1]
+                        ];
+                    return c[0].length < a.length && b.unshift(n(a.substr(c[0].length), a.trailing, a.lineNumber + 2)) , [
+                        e
+                    ];
+                },
+                code: function(a, b) {
+                    var c = [],
+                        d = /^(?: {0,3}\t| {4})(.*)\n?/;
+                    if (!a.match(d))  {
+                        return void 0;
+                    }
+                    
+                    a: for (; ; ) {
+                        var e = this.loop_re_over_block(d, a.valueOf(), function(a) {
+                                c.push(a[1]);
+                            });
+                        if (e.length) {
+                            b.unshift(n(e, a.trailing));
+                            break a;
+                        }
+                        if (!b.length)  {
+                            break a;
+                        }
+                        
+                        if (!b[0].match(d))  {
+                            break a;
+                        }
+                        
+                        c.push(a.trailing.replace(/[^\n]/g, "").substring(2)) , a = b.shift();
+                    }
+                    return [
+                        [
+                            "code_block",
+                            c.join("\n")
+                        ]
+                    ];
+                },
+                horizRule: function(a, b) {
+                    var c = a.match(/^(?:([\s\S]*?)\n)?[ \t]*([-_*])(?:[ \t]*\2){2,}[ \t]*(?:\n([\s\S]*))?$/);
+                    if (!c)  {
+                        return void 0;
+                    }
+                    
+                    var d = [
+                            [
+                                "hr"
+                            ]
+                        ];
+                    if (c[1]) {
+                        var e = n(c[1], "", a.lineNumber);
+                        d.unshift.apply(d, this.toTree(e, []));
+                    }
+                    return c[3] && b.unshift(n(c[3], a.trailing, a.lineNumber + 1)) , d;
+                },
+                lists: function() {
+                    function a(a) {
+                        return new RegExp("(?:^(" + i + "{0," + a + "} {0,3})(" + f + ")\\s+)|(^" + i + "{0," + (a - 1) + "}[ ]{0,4})");
+                    }
+                    function b(a) {
+                        return a.replace(/ {0,3}\t/g, "    ");
+                    }
+                    function c(a, b, c, d) {
+                        if (b)  {
+                            return a.push([
+                                "para"
+                            ].concat(c)) , void 0;
+                        }
+                        
+                        var e = a[a.length - 1] instanceof Array && "para" === a[a.length - 1][0] ? a[a.length - 1] : a;
+                        d && a.length > 1 && c.unshift(d);
+                        for (var f = 0; f < c.length; f++) {
+                            var g = c[f],
+                                h = "string" == typeof g;
+                            h && e.length > 1 && "string" == typeof e[e.length - 1] ? e[e.length - 1] += g : e.push(g);
+                        }
+                    }
+                    function d(a, b) {
+                        for (var c = new RegExp("^(" + i + "{" + a + "}.*?\\n?)*$"),
+                            d = new RegExp("^" + i + "{" + a + "}", "gm"),
+                            e = []; b.length > 0 && c.exec(b[0]); ) {
+                            var f = b.shift(),
+                                g = f.replace(d, "");
+                            e.push(n(g, f.trailing, f.lineNumber));
+                        }
+                        return e;
+                    }
+                    function e(a, b, c) {
+                        var d = a.list,
+                            e = d[d.length - 1];
+                        if (!(e[1] instanceof Array && "para" === e[1][0]))  {
+                            if (b + 1 === c.length)  {
+                                e.push([
+                                    "para"
+                                ].concat(e.splice(1, e.length - 1)));
+                            }
+                            else {
+                                var f = e.pop();
+                                e.push([
+                                    "para"
+                                ].concat(e.splice(1, e.length - 1)), f);
+                            };
+                        }
+                        
+                    }
+                    var f = "[*+-]|\\d+\\.",
+                        g = /[*+-]/,
+                        h = new RegExp("^( {0,3})(" + f + ")[ \t]+"),
+                        i = "(?: {0,3}\\t| {4})";
+                    return function(f, i) {
+                        function j(a) {
+                            var b = g.exec(a[2]) ? [
+                                    "bulletlist"
+                                ] : [
+                                    "numberlist"
+                                ];
+                            return n.push({
+                                list: b,
+                                indent: a[1]
+                            }) , b;
+                        }
+                        var k = f.match(h);
+                        if (!k)  {
+                            return void 0;
+                        }
+                        
+                        for (var l, m,
+                            n = [],
+                            o = j(k),
+                            p = !1,
+                            r = [
+                                n[0].list
+                            ]; ; ) {
+                            for (var s = f.split(/(?=\n)/),
+                                t = "",
+                                u = "",
+                                v = 0; v < s.length; v++) {
+                                u = "";
+                                var w = s[v].replace(/^\n/, function(a) {
+                                        return u = a , "";
+                                    }),
+                                    x = a(n.length);
+                                if (k = w.match(x) , void 0 !== k[1]) {
+                                    t.length && (c(l, p, this.processInline(t), u) , p = !1 , t = "") , k[1] = b(k[1]);
+                                    var y = Math.floor(k[1].length / 4) + 1;
+                                    if (y > n.length)  {
+                                        o = j(k) , l.push(o) , l = o[1] = [
+                                            "listitem"
+                                        ];
+                                    }
+                                    else {
+                                        var z = !1;
+                                        for (m = 0; m < n.length; m++) if (n[m].indent === k[1]) {
+                                            o = n[m].list , n.splice(m + 1, n.length - (m + 1)) , z = !0;
+                                            break;
+                                        };
+                                        z || (y++ , y <= n.length ? (n.splice(y, n.length - y) , o = n[y - 1].list) : (o = j(k) , l.push(o))) , l = [
+                                            "listitem"
+                                        ] , o.push(l);
+                                    }
+                                    u = "";
+                                }
+                                w.length > k[0].length && (t += u + w.substr(k[0].length));
+                            }
+                            t.length && (c(l, p, this.processInline(t), u) , p = !1 , t = "");
+                            var A = d(n.length, i);
+                            A.length > 0 && (q(n, e, this) , l.push.apply(l, this.toTree(A, [])));
+                            var B = i[0] && i[0].valueOf() || "";
+                            if (!B.match(h) && !B.match(/^ /))  {
+                                break;
+                            }
+                            
+                            f = i.shift();
+                            var C = this.dialect.block.horizRule(f, i);
+                            if (C) {
+                                r.push.apply(r, C);
+                                break;
+                            }
+                            q(n, e, this) , p = !0;
+                        }
+                        return r;
+                    };
+                }(),
+                blockquote: function(a, b) {
+                    if (!a.match(/^>/m))  {
+                        return void 0;
+                    }
+                    
+                    var c = [];
+                    if (">" !== a[0]) {
+                        for (var d = a.split(/\n/),
+                            e = [],
+                            f = a.lineNumber; d.length && ">" !== d[0][0]; ) e.push(d.shift()) , f++;
+                        var g = n(e.join("\n"), "\n", a.lineNumber);
+                        c.push.apply(c, this.processBlock(g, [])) , a = n(d.join("\n"), a.trailing, f);
+                    }
+                    for (; b.length && ">" === b[0][0]; ) {
+                        var h = b.shift();
+                        a = n(a + a.trailing + h, h.trailing, a.lineNumber);
+                    }
+                    var i = a.replace(/^> ?/gm, ""),
+                        j = (this.tree , this.toTree(i, [
+                            "blockquote"
+                        ])),
+                        k = o(j);
+                    return k && k.references && (delete k.references , r(k) && j.splice(1, 1)) , c.push(j) , c;
+                },
+                referenceDefn: function(a, b) {
+                    var c = /^\s*\[(.*?)\]:\s*(\S+)(?:\s+(?:(['"])(.*?)\3|\((.*?)\)))?\n?/;
+                    if (!a.match(c))  {
+                        return void 0;
+                    }
+                    
+                    o(this.tree) || this.tree.splice(1, 0, {});
+                    var d = o(this.tree);
+                    void 0 === d.references && (d.references = {});
+                    var e = this.loop_re_over_block(c, a, function(a) {
+                            a[2] && "<" === a[2][0] && ">" === a[2][a[2].length - 1] && (a[2] = a[2].substring(1, a[2].length - 1));
+                            var b = d.references[a[1].toLowerCase()] = {
+                                    href: a[2]
+                                };
+                            void 0 !== a[4] ? b.title = a[4] : void 0 !== a[5] && (b.title = a[5]);
+                        });
+                    return e.length && b.unshift(n(e, a.trailing)) , [];
+                },
+                para: function(a) {
+                    return [
+                        [
+                            "para"
+                        ].concat(this.processInline(a))
+                    ];
+                }
+            },
+            inline: {
+                __oneElement__: function(a, b, c) {
+                    var d, e;
+                    b = b || this.dialect.inline.__patterns__;
+                    var f = new RegExp("([\\s\\S]*?)(" + (b.source || b) + ")");
+                    if (d = f.exec(a) , !d)  {
+                        return [
+                            a.length,
+                            a
+                        ];
+                    }
+                    
+                    if (d[1])  {
+                        return [
+                            d[1].length,
+                            d[1]
+                        ];
+                    }
+                    
+                    var e;
+                    return d[2] in this.dialect.inline && (e = this.dialect.inline[d[2]].call(this, a.substr(d.index), d, c || [])) , e = e || [
+                        d[2].length,
+                        d[2]
+                    ];
+                },
+                __call__: function(a, b) {
+                    function c(a) {
+                        "string" == typeof a && "string" == typeof e[e.length - 1] ? e[e.length - 1] += a : e.push(a);
+                    }
+                    for (var d,
+                        e = []; a.length > 0; ) d = this.dialect.inline.__oneElement__.call(this, a, b, e) , a = a.substr(d.shift()) , q(d, c);
+                    return e;
+                },
+                "]": function() {},
+                "}": function() {},
+                __escape__: /^\\[\\`\*_{}\[\]()#\+.!\-]/,
+                "\\": function(a) {
+                    return this.dialect.inline.__escape__.exec(a) ? [
+                        2,
+                        a.charAt(1)
+                    ] : [
+                        1,
+                        "\\"
+                    ];
+                },
+                "![": function(a) {
+                    var b = a.match(/^!\[(.*?)\][ \t]*\([ \t]*([^")]*?)(?:[ \t]+(["'])(.*?)\3)?[ \t]*\)/);
+                    if (b) {
+                        b[2] && "<" === b[2][0] && ">" === b[2][b[2].length - 1] && (b[2] = b[2].substring(1, b[2].length - 1)) , b[2] = this.dialect.inline.__call__.call(this, b[2], /\\/)[0];
+                        var c = {
+                                alt: b[1],
+                                href: b[2] || ""
+                            };
+                        return void 0 !== b[4] && (c.title = b[4]) , [
+                            b[0].length,
+                            [
+                                "img",
+                                c
+                            ]
+                        ];
+                    }
+                    return b = a.match(/^!\[(.*?)\][ \t]*\[(.*?)\]/) , b ? [
+                        b[0].length,
+                        [
+                            "img_ref",
+                            {
+                                alt: b[1],
+                                ref: b[2].toLowerCase(),
+                                original: b[0]
+                            }
+                        ]
+                    ] : [
+                        2,
+                        "!["
+                    ];
+                },
+                "[": function v(a) {
+                    var b = String(a),
+                        c = s.call(this, a.substr(1), "]");
+                    if (!c)  {
+                        return [
+                            1,
+                            "["
+                        ];
+                    }
+                    
+                    var v, d,
+                        e = 1 + c[0],
+                        f = c[1];
+                    a = a.substr(e);
+                    var g = a.match(/^\s*\([ \t]*([^"']*)(?:[ \t]+(["'])(.*?)\2)?[ \t]*\)/);
+                    if (g) {
+                        var h = g[1];
+                        if (e += g[0].length , h && "<" === h[0] && ">" === h[h.length - 1] && (h = h.substring(1, h.length - 1)) , !g[3])  {
+                            for (var i = 1,
+                                j = 0; j < h.length; j++) switch (h[j]) {
+                                case "(":
+                                    i++;
+                                    break;
+                                case ")":
+                                    0 === --i && (e -= h.length - j , h = h.substring(0, j));
+                            };
+                        }
+                        
+                        return h = this.dialect.inline.__call__.call(this, h, /\\/)[0] , d = {
+                            href: h || ""
+                        } , void 0 !== g[3] && (d.title = g[3]) , v = [
+                            "link",
+                            d
+                        ].concat(f) , [
+                            e,
+                            v
+                        ];
+                    }
+                    return g = a.match(/^\s*\[(.*?)\]/) , g ? (e += g[0].length , d = {
+                        ref: (g[1] || String(f)).toLowerCase(),
+                        original: b.substr(0, e)
+                    } , v = [
+                        "link_ref",
+                        d
+                    ].concat(f) , [
+                        e,
+                        v
+                    ]) : 1 === f.length && "string" == typeof f[0] ? (d = {
+                        ref: f[0].toLowerCase(),
+                        original: b.substr(0, e)
+                    } , v = [
+                        "link_ref",
+                        d,
+                        f[0]
+                    ] , [
+                        e,
+                        v
+                    ]) : [
+                        1,
+                        "["
+                    ];
+                },
+                "<": function(a) {
+                    var b;
+                    return null !== (b = a.match(/^<(?:((https?|ftp|mailto):[^>]+)|(.*?@.*?\.[a-zA-Z]+))>/)) ? b[3] ? [
+                        b[0].length,
+                        [
+                            "link",
+                            {
+                                href: "mailto:" + b[3]
+                            },
+                            b[3]
+                        ]
+                    ] : "mailto" === b[2] ? [
+                        b[0].length,
+                        [
+                            "link",
+                            {
+                                href: b[1]
+                            },
+                            b[1].substr("mailto:".length)
+                        ]
+                    ] : [
+                        b[0].length,
+                        [
+                            "link",
+                            {
+                                href: b[1]
+                            },
+                            b[1]
+                        ]
+                    ] : [
+                        1,
+                        "<"
+                    ];
+                },
+                "`": function(a) {
+                    var b = a.match(/(`+)(([\s\S]*?)\1)/);
+                    return b && b[2] ? [
+                        b[1].length + b[2].length,
+                        [
+                            "inlinecode",
+                            b[3]
+                        ]
+                    ] : [
+                        1,
+                        "`"
+                    ];
+                },
+                "  \n": function() {
+                    return [
+                        3,
+                        [
+                            "linebreak"
+                        ]
+                    ];
+                }
+            }
+        };
+    t.inline["**"] = i("strong", "**") , t.inline.__ = i("strong", "__") , t.inline["*"] = i("em", "*") , t.inline._ = i("em", "_") , m.dialects.Gruber = t , m.buildBlockOrder(m.dialects.Gruber.block) , m.buildInlinePatterns(m.dialects.Gruber.inline);
+    var u = p.subclassDialect(t),
+        o = k.extract_attr,
+        q = k.forEach;
+    u.processMetaHash = function(a) {
+        for (var b = j(a),
+            c = {},
+            d = 0; d < b.length; ++d) if (/^#/.test(b[d]))  {
+            c.id = b[d].substring(1);
+        }
+        else if (/^\./.test(b[d]))  {
+            c["class"] = c["class"] ? c["class"] + b[d].replace(/./, " ") : b[d].substring(1);
+        }
+        else if (/\=/.test(b[d])) {
+            var e = b[d].split(/\=/);
+            c[e[0]] = e[1];
+        };
+        return c;
+    } , u.block.document_meta = function(a) {
+        if (a.lineNumber > 1)  {
+            return void 0;
+        }
+        
+        if (!a.match(/^(?:\w+:.*\n)*\w+:.*$/))  {
+            return void 0;
+        }
+        
+        o(this.tree) || this.tree.splice(1, 0, {});
+        var b = a.split(/\n/);
+        for (var c in b) {
+            var d = b[c].match(/(\w+):\s*(.*)$/),
+                e = d[1].toLowerCase(),
+                f = d[2];
+            this.tree[1][e] = f;
+        }
+        return [];
+    } , u.block.block_meta = function(a) {
+        var b = a.match(/(^|\n) {0,3}\{:\s*((?:\\\}|[^\}])*)\s*\}$/);
+        if (!b)  {
+            return void 0;
+        }
+        
+        var c,
+            d = this.dialect.processMetaHash(b[2]);
+        if ("" === b[1]) {
+            var e = this.tree[this.tree.length - 1];
+            if (c = o(e) , "string" == typeof e)  {
+                return void 0;
+            }
+            
+            c || (c = {} , e.splice(1, 0, c));
+            for (var f in d) c[f] = d[f];
+            return [];
+        }
+        var g = a.replace(/\n.*$/, ""),
+            h = this.processBlock(g, []);
+        c = o(h[0]) , c || (c = {} , h[0].splice(1, 0, c));
+        for (var f in d) c[f] = d[f];
+        return h;
+    } , u.block.definition_list = function(a, b) {
+        var c, d,
+            e = /^((?:[^\s:].*\n)+):\s+([\s\S]+)$/,
+            f = [
+                "dl"
+            ];
+        if (!(d = a.match(e)))  {
+            return void 0;
+        }
+        
+        for (var g = [
+                a
+            ]; b.length && e.exec(b[0]); ) g.push(b.shift());
+        for (var h = 0; h < g.length; ++h) {
+            var d = g[h].match(e),
+                i = d[1].replace(/\n$/, "").split(/\n/),
+                j = d[2].split(/\n:\s+/);
+            for (c = 0; c < i.length; ++c) f.push([
+                "dt",
+                i[c]
+            ]);
+            for (c = 0; c < j.length; ++c) f.push([
+                "dd"
+            ].concat(this.processInline(j[c].replace(/(\n)\s+/, "$1"))));
+        }
+        return [
+            f
+        ];
+    } , u.block.table = function w(a) {
+        var b, c,
+            d = function(a, b) {
+                b = b || "\\s" , b.match(/^[\\|\[\]{}?*.+^$]$/) && (b = "\\" + b);
+                for (var c,
+                    d = [],
+                    e = new RegExp("^((?:\\\\.|[^\\\\" + b + "])*)" + b + "(.*)"); c = a.match(e); ) d.push(c[1]) , a = c[2];
+                return d.push(a) , d;
+            },
+            e = /^ {0,3}\|(.+)\n {0,3}\|\s*([\-:]+[\-| :]*)\n((?:\s*\|.*(?:\n|$))*)(?=\n|$)/,
+            f = /^ {0,3}(\S(?:\\.|[^\\|])*\|.*)\n {0,3}([\-:]+\s*\|[\-| :]*)\n((?:(?:\\.|[^\\|])*\|.*(?:\n|$))*)(?=\n|$)/;
+        if (c = a.match(e))  {
+            c[3] = c[3].replace(/^\s*\|/gm, "");
+        }
+        else if (!(c = a.match(f)))  {
+            return void 0;
+        }
+        
+        var w = [
+                "table",
+                [
+                    "thead",
+                    [
+                        "tr"
+                    ]
+                ],
+                [
+                    "tbody"
+                ]
+            ];
+        c[2] = c[2].replace(/\|\s*$/, "").split("|");
+        var g = [];
+        for (q(c[2], function(a) {
+            a.match(/^\s*-+:\s*$/) ? g.push({
+                align: "right"
+            }) : a.match(/^\s*:-+\s*$/) ? g.push({
+                align: "left"
+            }) : a.match(/^\s*:-+:\s*$/) ? g.push({
+                align: "center"
+            }) : g.push({});
+        }) , c[1] = d(c[1].replace(/\|\s*$/, ""), "|") , b = 0; b < c[1].length; b++) w[1][1].push([
+            "th",
+            g[b] || {}
+        ].concat(this.processInline(c[1][b].trim())));
+        return q(c[3].replace(/\|\s*$/gm, "").split("\n"), function(a) {
+            var c = [
+                    "tr"
+                ];
+            for (a = d(a, "|") , b = 0; b < a.length; b++) c.push([
+                "td",
+                g[b] || {}
+            ].concat(this.processInline(a[b].trim())));
+            w[2].push(c);
+        }, this) , [
+            w
+        ];
+    } , u.inline["{:"] = function(a, b, c) {
+        if (!c.length)  {
+            return [
+                2,
+                "{:"
+            ];
+        }
+        
+        var d = c[c.length - 1];
+        if ("string" == typeof d)  {
+            return [
+                2,
+                "{:"
+            ];
+        }
+        
+        var e = a.match(/^\{:\s*((?:\\\}|[^\}])*)\s*\}/);
+        if (!e)  {
+            return [
+                2,
+                "{:"
+            ];
+        }
+        
+        var f = this.dialect.processMetaHash(e[1]),
+            g = o(d);
+        g || (g = {} , d.splice(1, 0, g));
+        for (var h in f) g[h] = f[h];
+        return [
+            e[0].length,
+            ""
+        ];
+    } , m.dialects.Maruku = u , m.dialects.Maruku.inline.__escape__ = /^\\[\\`\*_{}\[\]()#\+.!\-|:]/ , m.buildBlockOrder(m.dialects.Maruku.block) , m.buildInlinePatterns(m.dialects.Maruku.inline) , a.Markdown = m , a.parse = m.parse , a.toHTML = m.toHTML , a.toHTMLTree = m.toHTMLTree , a.renderJsonML = m.renderJsonML;
+}(function() {
+    return window.markdown = {} , window.markdown;
+}());
 
 //    PouchDB 3.6.0
 //    
@@ -80077,12 +81356,33 @@ Ext.define('Ext.data.identifier.LocalUuid', {
     ])(89);
 });
 
+/*global Ext:false*/
 /**
  * funkring util lib
  */
 var futil = {
-        comma: ","
+        comma: ",",
+        activetap: false
     };
+futil.isDoubleTap = function() {
+    if (!futil.activetab) {
+        futil.activetab = true;
+        setTimeout(function() {
+            futil.activetab = false;
+        }, 1000);
+        return false;
+    }
+    return true;
+};
+futil.startLoading = function(msg) {
+    Ext.Viewport.setMasked({
+        xtype: 'loadmask',
+        message: msg
+    });
+};
+futil.stopLoading = function() {
+    Ext.Viewport.setMasked(false);
+};
 futil.screenWidth = function() {
     var width = (window.innerWidth > 0) ? window.innerWidth : screen.width;
     return width;
@@ -80282,20 +81582,15 @@ Ext.application({
     views: [
         'NumberView',
         'ScrollList',
-        'Main',
         'FormView',
         'ListSelect',
         'PartnerView',
         'ConfigView',
         'NumberInputView',
         'SmallNumberInputView',
-        'PricelistView'
-    ],
-    /*,
-        'ListSelect',
-        'ScrollList',
         'PricelistView',
-        'NumberInputView'*/
+        'Main'
+    ],
     models: [
         'BasicItem',
         'Item',
@@ -80316,7 +81611,10 @@ Ext.application({
         'PricelistItemStore'
     ],
     controllers: [
-        'Main'
+        'MainCtrl',
+        'ItemTabCtrl',
+        'PartnerTabCtrl',
+        'SyncTabCtrl'
     ],
     icon: {
         '57': 'resources/icons/Icon.png',
@@ -80349,6 +81647,7 @@ Ext.application({
 });
 
 // @tag full-page
+// @require /Users/martin/Work/odoo/fclipboard/markdown.min.js
 // @require /Users/martin/Work/odoo/fclipboard/pouchdb-3.6.0.min.js
 // @require /Users/martin/Work/odoo/fclipboard/futil.js
 // @require /Users/martin/Work/odoo/fclipboard/openerplib.js

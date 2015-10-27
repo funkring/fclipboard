@@ -2219,8 +2219,8 @@ Ext.ClassManager.addNameAlternateMappings({
   "Ext.plugin.PullRefresh": [],
   "Ext.plugin.SortableList": [],
   "Ext.proxy.PouchDB": [],
-  "Ext.proxy.PouchDBDriver": [
-    "PouchDBDriver"
+  "Ext.proxy.PouchDBUtil": [
+    "DBUtil"
   ],
   "Ext.scroll.Indicator": [
     "Ext.util.Indicator"
@@ -2320,7 +2320,10 @@ Ext.ClassManager.addNameAlternateMappings({
   "Ext.viewport.WindowsPhone": [
     "Ext.viewport.WP"
   ],
-  "Fclipboard.controller.Main": [],
+  "Fclipboard.controller.ItemTabCtrl": [],
+  "Fclipboard.controller.MainCtrl": [],
+  "Fclipboard.controller.PartnerTabCtrl": [],
+  "Fclipboard.controller.SyncTabCtrl": [],
   "Fclipboard.model.BasicItem": [],
   "Fclipboard.model.HeaderItem": [],
   "Fclipboard.model.Item": [],
@@ -2336,6 +2339,9 @@ Ext.ClassManager.addNameAlternateMappings({
   "Fclipboard.store.PartnerStore": [],
   "Fclipboard.store.PricelistItemStore": [],
   "Fclipboard.store.PricelistStore": [],
+  "Fclipboard.util.Config": [
+    "Config"
+  ],
   "Fclipboard.view.ConfigView": [],
   "Fclipboard.view.FormView": [],
   "Fclipboard.view.ListSelect": [],
@@ -3187,7 +3193,7 @@ Ext.ClassManager.addNameAliasMappings({
   "Ext.proxy.PouchDB": [
     "proxy.pouchdb"
   ],
-  "Ext.proxy.PouchDBDriver": [],
+  "Ext.proxy.PouchDBUtil": [],
   "Ext.scroll.Indicator": [],
   "Ext.scroll.Scroller": [],
   "Ext.scroll.View": [],
@@ -3294,7 +3300,10 @@ Ext.ClassManager.addNameAliasMappings({
   "Ext.viewport.Ios": [],
   "Ext.viewport.Viewport": [],
   "Ext.viewport.WindowsPhone": [],
-  "Fclipboard.controller.Main": [],
+  "Fclipboard.controller.ItemTabCtrl": [],
+  "Fclipboard.controller.MainCtrl": [],
+  "Fclipboard.controller.PartnerTabCtrl": [],
+  "Fclipboard.controller.SyncTabCtrl": [],
   "Fclipboard.model.BasicItem": [],
   "Fclipboard.model.HeaderItem": [],
   "Fclipboard.model.Item": [],
@@ -3310,6 +3319,7 @@ Ext.ClassManager.addNameAliasMappings({
   "Fclipboard.store.PartnerStore": [],
   "Fclipboard.store.PricelistItemStore": [],
   "Fclipboard.store.PricelistStore": [],
+  "Fclipboard.util.Config": [],
   "Fclipboard.view.ConfigView": [
     "widget.configform"
   ],
