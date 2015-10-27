@@ -97,13 +97,6 @@ Ext.define('Fclipboard.controller.MainCtrl', {
         if ( !isValid ) {
             return;
         }
-
-        // check for save handler
-        var saveHandler = null;
-        try { 
-            saveHandler = view.getSaveHandler();
-        } catch (err) {            
-        }        
         
         futil.startLoading("Änderungen werden gespeichert...");
         var record = null;
@@ -114,11 +107,12 @@ Ext.define('Fclipboard.controller.MainCtrl', {
             var prevView = mainView.getPreviousItem();
             var popCount = 1;
             if (prevView && record) {
-                try {
-                    prevView.fieldSelectRecord(record);
+                // check field select record function
+                var fieldSelectRecord = prevView.fieldSelectRecord || prevView.config.fieldSelectRecord;
+                if (fieldSelectRecord) {
+                    fieldSelectRecord(record);
                     popCount++;
-                } catch(err2) {                    
-                }
+                } 
             }
                  
             mainView.fireEvent("newRecord", record);       
@@ -130,6 +124,7 @@ Ext.define('Fclipboard.controller.MainCtrl', {
         };
         
         // if save handler exist use it
+        var saveHandler = view.saveHandler || view.config.saveHandler;
         if ( saveHandler ) {
             saveHandler(view, reloadHandler);          
         } else {
