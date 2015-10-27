@@ -5,7 +5,7 @@ Ext.define('Ext.proxy.PouchDBUtil',{
     
     singleton: true,
     
-    config: {        
+    config: {
     },
                 
     constructor: function(config) {
@@ -206,6 +206,30 @@ Ext.define('Ext.proxy.PouchDBUtil',{
                 callback(err);
             }
         });
+    },
+    
+    /**
+     * deep data copy (without _id and _rev)
+     */
+    createClone: function(data) {
+          if ( !data ) 
+            return data;
+                        
+          var dumps = JSON.stringify(data, function(key, value) {
+             if (key == '_id') {
+                 return undefined;
+             } else if ( key == '_rev') {
+                 return undefined;
+             } else if ( key == 'create_uid') {
+                 return undefined;
+             } else if ( key == 'write_uid') {
+                return undefined;
+             } else {
+                 return value;
+             }             
+          });
+          return JSON.parse(dumps);
+          
     },
     
     deepChildCopy: function(db, new_parent_uuid, template_uuid, parent_field, defaults, callback ) {

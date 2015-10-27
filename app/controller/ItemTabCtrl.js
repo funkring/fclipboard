@@ -306,7 +306,7 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
                 if ( template_id ) {
                     db.get(template_id).then(function (template) {
                         // set values to copy
-                        values.rule_ids = template.rule_ids;
+                        values.rule_ids = DBUtil.createClone(template.rule_ids);
                         // save and copy childs
                         postValues();                    
                         
@@ -843,7 +843,6 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
     newItem: function() {  
         var self = this;        
         var rules = self.getMatchingRules();
-        
         //TODO real rule processing
         if ( rules.length == 1 ) {       
             var rule = rules[0];
