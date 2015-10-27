@@ -22,6 +22,11 @@ Ext.define('Fclipboard.model.Partner', {
             database: 'fclipboard',
             domain: [['customer','=',true]],
             resModel: 'res.partner'
-        }
+       },
+       deleteChecks: [
+       {
+          field : "partner_id",
+          message: "Ein verwendeter Partner kann nicht gelöscht werden!"
+       }]
    } 
 });

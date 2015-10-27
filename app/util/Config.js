@@ -8,7 +8,8 @@ Ext.define('Fclipboard.util.Config', {
     ],
     config : {
         "searchDelay" : 500,
-        "searchLimit" : 100
+        "searchLimit" : 100,
+        "maxRows" : 10
     },
     
     constructor: function(config) {

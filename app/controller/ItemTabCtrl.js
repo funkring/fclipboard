@@ -1,4 +1,4 @@
-/*global Ext:false, PouchDB:false, DBUtil:false, Config:false, openerplib:false, futil:false, Fclipboard:false*/
+/*global Ext:false, PouchDB:false, DBUtil:false, Config:false, openerplib:false, futil:false, Fclipboard:false, markdown:false*/
 Ext.define('Fclipboard.controller.ItemTabCtrl', {
     extend: 'Ext.app.Controller',
     requires: [
@@ -18,13 +18,15 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
             itemInfo: '#itemInfo',
             parentItemButton: '#parentItemButton',
             editItemButton: '#editItemButton',
-            newItemButton: '#newItemButton'         
+            newItemButton: '#newItemButton',
+            itemSearch: '#itemSearch'         
             
         },
         control: {           
             mainView: {
                deletedRecord: 'deletedRecord',
-               newRecord: 'newRecord'
+               newRecord: 'newRecord',
+               reinitialize: 'reinitialize'
             },
             editItemButton: {
                 tap: 'editCurrentItem'   
@@ -34,10 +36,12 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
             },
             parentItemButton: {
                 tap: 'parentItem'  
-            },            
-            itemTab: {
+            },         
+            itemSearch: {
                 keyup : 'searchItemKeyUp',
-                clearicontap: 'searchItemClearIconTap',
+                clearicontap: 'searchItemClearIconTap'                
+            },
+            itemTab: {
                 activate: 'itemTabActivate'
             },
             itemList: {
@@ -50,20 +54,28 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
             }
         }
     },
-       
+    
+    initState: function() {
+        this.path = [];
+        this.itemSearch = null;
+        this.pricelist = null;
+        this.record = null;
+    },
+           
     init: function() {
         var self = this;        
         self.callParent(arguments);
-        
-        self.path = [];
-        self.itemSearch = null;
-        self.pricelist = null;
-        self.record = null;
+        self.initState();
         
         self.itemSearchTask = Ext.create('Ext.util.DelayedTask', function() {
             self.searchItems();
         });
         
+    },
+        
+    reinitialize: function() {
+        this.initState();
+        this.loadItem();
     },
     
     deletedRecord: function(record) {
@@ -225,6 +237,13 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
                     });
         }
         
+        formItems.push({
+            xtype: 'textareafield',
+            name: 'valt',
+            label: 'Beschreibung',
+            maxRows: Config.getMaxRows()
+        });
+        
          // new view         
         var itemForm = Ext.create("Fclipboard.view.FormView",{
             title: title || 'Neue Arbeitsmappe',        
@@ -336,24 +355,39 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
                    }
                    path.push(self.record.get('name'));
                    info.path = path.join(" / ");
+                                    
+                   var text = self.record.get('valt');
+                   if ( text ) {
+                    try {
+                        info.text = markdown.toHTML(text);
+                    } catch (err) {
+                        info.text = text;
+                    }
+                   }
+                   
                 }
                 
                 
                 // create info cols                
                 info.infoFields = [];
+                info.allFields = [];
                 Ext.each(items, function(item) {
                    if ( item.item ) {
                        var val = Config.valueToString(values[item.name], item.vtype);
                        if (!val) {
                            return;
                        }   
+                       
+                       var fieldData = {
+                          "label" : item.label,
+                          "value" : val 
+                       };
+                       
+                       info.allFields.push(fieldData);
                        if ( !info.header ) {
                             info.header = val;
                        } else { 
-                           info.infoFields.push({
-                              "label" : item.label,
-                              "value" : val 
-                           });             
+                           info.infoFields.push(fieldData);             
                        }
                     }
                 });
@@ -363,30 +397,25 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
                     if ( futil.screenHeight() < 700 ) {
                         self.infoTemplate = new Ext.XTemplate(
                             '<tpl if="path">',
-                                '<div class="fclipboard-path">{path}</div>',
+                                '<div class="fclipboard-path">{path} <tpl if="header">({header})</tpl></div>',
                             '</tpl>',
-                            '<tpl if="header">',
-                                '<div class="fc-info-container">',
-                                    '<div class="fclipboard-path">',
-                                        '{header}',
-                                    '</div>',
-                                    '<div class="fc-info-last"></div>',        
-                                '</div>',                
+                            '<tpl if="text">',
+                                '<div class="fclipboard-info">{text}</div>',
                             '</tpl>');
                     } else {
                         self.infoTemplate = new Ext.XTemplate(
                             '<tpl if="path">',
                                 '<div class="fclipboard-path">{path}</div>',
                             '</tpl>',
+                            '<tpl if="text">',
+                                '<div class="fclipboard-info">{text}</div>',
+                            '</tpl>',
                             '<tpl if="header">',
-                                '<div class="fc-info-container">',
-                                    '<div class="fclipboard-path">',
-                                        '{header}',
-                                    '</div>',
-                                    '<tpl for="infoFields">',
+                                '<div class="fc-info-container">',                                    
+                                    '<tpl for="allFields">',
                                         '<div class="fc-info-field">',
                                             '<div class="fc-info-label">',
-                                                '{label}: ',
+                                                '{label}',
                                             '</div>',
                                             '<div class="fc-info-value">',
                                                 '{value}',
@@ -399,8 +428,9 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
                     }
                 }
         
-                // set info            
-                self.getItemInfo().setHtml(self.infoTemplate.apply(info));
+                // set info
+                var html = self.infoTemplate.apply(info);
+                self.getItemInfo().setHtml(html);
                              
                 // update buttons
                 var noRecord = self.record === null;        
@@ -498,6 +528,14 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
                     
                     // check show view funciton
                     var callbackBarrier = new futil.Barrier( function() {
+                        
+                        items.push({
+                            xtype: 'textareafield',
+                            name: 'valt',
+                            label: 'Beschreibung',
+                            maxRows: Config.getMaxRows()
+                        });
+                        
                         callback(items, values);
                     });        
                     
@@ -687,17 +725,18 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
                                         //***********************************
                                         //finished
                                         //***********************************
-                                        if ( noselect ) {
+                                         if ( noselect ) {
                                             // if no select only load
                                             self.loadItem(callback);      
                                         } else {
-                                            self.setItem(record, callback);
+                                            self.selectId(record.getId(), callback);
                                         }
                                     }
                                 };
                             
                                 // update name
                                 doc.name = newValues.name;
+                                doc.valt = newValues.valt;
                                 db.put(doc).then(function(res) {
                                     updateItem();
                                 }).catch(function(err) {
@@ -758,7 +797,7 @@ Ext.define('Fclipboard.controller.ItemTabCtrl', {
     setItem: function(item, callback) {
         var self = this;
             
-        if (self.record !== null && self.record !== item) {
+        if (self.record !== null && self.record !== item && (item === null || item.getId() !== self.record.getId()) ) {
             self.path.push(self.record);
         }
       

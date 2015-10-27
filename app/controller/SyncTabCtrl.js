@@ -220,6 +220,6 @@ Ext.define('Fclipboard.controller.SyncTabCtrl', {
             load({});
         });        
         
-    },
+    }
     
 });

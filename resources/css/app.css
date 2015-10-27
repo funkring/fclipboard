@@ -6800,15 +6800,13 @@ body.x-desktop {
 
 .fc-info-header {
   font-weight: bold;
-  color: #115a8d;
   margin: 8px 10px 6px 10px;
 }
 
 .fc-info-field {
   float: left;
-  margin: 2px 10px 4px 25px;
+  margin: 2px 10px 4px 8px;
   width: 200px;
-  color: #55b3f4;
 }
 
 .fc-info, .fc-info-label, .fc-info-value {
@@ -6816,7 +6814,12 @@ body.x-desktop {
 }
 
 .fc-info-label {
-  color: #115a8d;
+  font-size: 75%;
+  color: grey;
+}
+
+.fc-info-value {
+  font-weight: bold;
 }
 
 .fc-info-last {
@@ -6825,9 +6828,23 @@ body.x-desktop {
 }
 
 .fclipboard-path {
-  margin: 8px 10px 8px 10px;
-  font-size: 80%;
+  margin: 8px 10px 8px 8px;
   font-weight: bold;
+  color: black;
+}
+
+.fclipboard-info {
+  margin: 8px 10px 8px 8px;
+  font-size: 75%;
+  color: grey;
+}
+
+.fclipboard-info h1 {
+  font-weight: bold;
+}
+
+.partner-info {
+  font-size: 80%;
   color: grey;
 }
 

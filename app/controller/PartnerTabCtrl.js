@@ -30,7 +30,8 @@ Ext.define('Fclipboard.controller.PartnerTabCtrl', {
                 clearicontap: 'partnerClearIconTap'
             },            
             partnerList: {
-                select: 'selectPartner'
+                select: 'selectPartner',
+                initialize: 'initializeList'
             }
         }
     },
@@ -44,6 +45,30 @@ Ext.define('Fclipboard.controller.PartnerTabCtrl', {
             self.searchPartner();
         });
            
+    },
+    
+    initializeList: function() {
+       this.getPartnerList().setItemTpl(Ext.create('Ext.XTemplate', 
+            '{name}<tpl if="infos"><div class="partner-info">{infos}</div></tpl>',
+            {
+              apply: function(values, parent) {
+                 // determine type
+                 var addressLine = [];
+                 if (values.street) {
+                     addressLine.push(values.street);
+                 }                 
+                 if (values.city) {
+                     if (values.zip) {
+                         addressLine.push(values.zip + " " + values.city);
+                     } else {
+                        addressLine.push(values.city);
+                     }
+                 }
+                 
+                 values.infos = addressLine.join(" - ");
+                 return this.applyOut(values, [], parent).join('');
+              }      
+            }));
     },
     
     recordChange: function(record) {
@@ -91,10 +116,12 @@ Ext.define('Fclipboard.controller.PartnerTabCtrl', {
        if ( !Ext.isEmpty(this.searchText) ) {
          options.filters = [{
                    property: 'name',
-                   value: this.searchText
+                   value: this.searchText,
+                   anyMatch: true
          }];
        }   
        
+       //<a href="tel:18475555555">1-847-555-5555</a>
        partnerStore.load(options);
     },
           

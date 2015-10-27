@@ -1,8 +1,9 @@
-/*global Ext:false, PouchDB:false, PouchDBDriver:false, openerplib:false, futil:false, Fclipboard:false, Config:false*/
+/*global Ext:false, DBUtil:false, PouchDB:false, openerplib:false, futil:false, Fclipboard:false, Config:false*/
 Ext.define('Fclipboard.controller.MainCtrl', {
     extend: 'Ext.app.Controller',
-    requires: [
+    requires: [    
         'Fclipboard.util.Config',
+        'Ext.proxy.PouchDBUtil',
         'Fclipboard.view.FormView'
     ],
     config: {
@@ -166,13 +167,44 @@ Ext.define('Fclipboard.controller.MainCtrl', {
                if(choice == 'yes')
                {                    
                    var db = Config.getDB();
-                   db.get( record.getId() ).then( function(doc) { 
-                        doc._deleted=true;
-                        db.put(doc).then( function() {
-                            mainView.fireEvent("deletedRecord", record);
-                            mainView.pop();
-                        });
-                   });
+                   var deleteChecks = null;
+                   
+                   try {
+                        deleteChecks = record.getDeleteChecks();
+                   } catch (err) {
+                   }
+                   
+                   var deleteFunc = function() {                   
+                       db.get( record.getId() ).then( function(doc) { 
+                            doc._deleted=true;
+                            db.put(doc).then( function() {
+                                mainView.fireEvent("deletedRecord", record);
+                                mainView.pop();
+                            });
+                       });
+                   };
+                
+                   var checkDelete = function(index) {
+                       if (!deleteChecks || index >= deleteChecks.length ) {
+                           deleteFunc();
+                       } else {
+                           var delCheck = deleteChecks[index];
+                           DBUtil.search(db, [[delCheck.field,'=',record.getId()]], {'include_docs':false}, function(err, res) {
+                              if ( !err && res.rows.length > 0 ) {
+                                Ext.Msg.alert('Fehler', delCheck.message, Ext.emptyFn);
+                              } else {
+                                checkDelete(index+1);       
+                              }
+                           });
+                           
+                       }
+                   };
+                    
+                   if ( deleteChecks ) {
+                    checkDelete(0);
+                   } else {
+                    deleteFunc();
+                   }
                        
                }         
             });
