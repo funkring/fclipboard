@@ -5,12 +5,12 @@
 	};
 	objectVersion = 46;
 	objects = {
+
 /* Begin PBXBuildFile section */
 		038F730B21BC465FB35454D6 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4EC0905F59824C2691A8D2BA /* CoreLocation.framework */; };
 		1D3623260D0F684500981E51 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 1D3623250D0F684500981E51 /* AppDelegate.m */; };
 		1D60589B0D05DD56006BFB54 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 29B97316FDCFA39411CA2CEA /* main.m */; };
 		288765FD0DF74451002DB57D /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 288765FC0DF74451002DB57D /* CoreGraphics.framework */; };
-		301BF552109A68D80062928A /* libCordova.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 301BF535109A57CC0062928A /* libCordova.a */; };
 		302D95F114D2391D003F00A1 /* MainViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 302D95EF14D2391D003F00A1 /* MainViewController.m */; };
 		302D95F214D2391D003F00A1 /* MainViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = 302D95F014D2391D003F00A1 /* MainViewController.xib */; };
 		305D5FD1115AB8F900A74A75 /* MobileCoreServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 305D5FD0115AB8F900A74A75 /* MobileCoreServices.framework */; };
@@ -32,6 +32,7 @@
 		5BA3914B1B6A063800E3CFB5 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5BA3914A1B6A063800E3CFB5 /* Images.xcassets */; };
 		5BAD3A831B6ADF550006FFC1 /* libsqlite3.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5BAD3A821B6ADF550006FFC1 /* libsqlite3.dylib */; };
 		5BAD3A8E1B6AEFBE0006FFC1 /* SQLitePlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = 7222A82DAA554B1A8190FAAC /* SQLitePlugin.m */; };
+		5BD9A64A1BE046D300939CFF /* libCordova.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 301BF535109A57CC0062928A /* libCordova.a */; };
 		67B4A86519AF44C3AD1A28C2 /* ImageIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F6D3C9526DB8449AA931D5F2 /* ImageIO.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		67CBA63EBCFC45C5930C92D9 /* CDVAssetLibraryFilesystem.m in Sources */ = {isa = PBXBuildFile; fileRef = 2EBF73C6FB5A4F4D883708A9 /* CDVAssetLibraryFilesystem.m */; };
 		6B5EC06AB6C94E1D9B607022 /* CDVCamera.m in Sources */ = {isa = PBXBuildFile; fileRef = 60F3EC6CE1834E93BC811AEE /* CDVCamera.m */; };
@@ -144,7 +145,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5B1594DD16A7569C00FEF299 /* AssetsLibrary.framework in Frameworks */,
-				301BF552109A68D80062928A /* libCordova.a in Frameworks */,
+				5BD9A64A1BE046D300939CFF /* libCordova.a in Frameworks */,
 				5BAD3A831B6ADF550006FFC1 /* libsqlite3.dylib in Frameworks */,
 				288765FD0DF74451002DB57D /* CoreGraphics.framework in Frameworks */,
 				305D5FD1115AB8F900A74A75 /* MobileCoreServices.framework in Frameworks */,
@@ -341,7 +342,7 @@
 		29B97313FDCFA39411CA2CEA /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 510;
+				LastUpgradeCheck = 710;
 				TargetAttributes = {
 					1D6058900D05DD3D006BFB54 = {
 						DevelopmentTeam = 8X73Z2WMR9;
@@ -487,6 +488,12 @@
 				GCC_PREFIX_HEADER = "Fclipboard/Fclipboard-Prefix.pch";
 				GCC_THUMB_SUPPORT = NO;
 				GCC_VERSION = "";
+				HEADER_SEARCH_PATHS = (
+					"\"$(TARGET_BUILD_DIR)/usr/local/lib/include\"",
+					"\"$(OBJROOT)/UninstalledProducts/include\"",
+					"\"$(BUILT_PRODUCTS_DIR)\"",
+					"\"$(OBJROOT)/UninstalledProducts/iphoneos/include\"",
+				);
 				INFOPLIST_FILE = "Fclipboard/Fclipboard-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 6.0;
 				OTHER_LDFLAGS = (
@@ -501,6 +508,7 @@
 					"-weak-lSystem",
 					"-ObjC",
 				);
+				PRODUCT_BUNDLE_IDENTIFIER = net.funkring.Fclipboard;
 				PRODUCT_NAME = Fclipboard;
 				PROVISIONING_PROFILE = "";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -521,6 +529,12 @@
 				GCC_PREFIX_HEADER = "Fclipboard/Fclipboard-Prefix.pch";
 				GCC_THUMB_SUPPORT = NO;
 				GCC_VERSION = "";
+				HEADER_SEARCH_PATHS = (
+					"\"$(TARGET_BUILD_DIR)/usr/local/lib/include\"",
+					"\"$(OBJROOT)/UninstalledProducts/include\"",
+					"\"$(BUILT_PRODUCTS_DIR)\"",
+					"\"$(OBJROOT)/UninstalledProducts/iphoneos/include\"",
+				);
 				INFOPLIST_FILE = "Fclipboard/Fclipboard-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 6.0;
 				OTHER_LDFLAGS = (
@@ -535,6 +549,7 @@
 					"-weak-lSystem",
 					"-ObjC",
 				);
+				PRODUCT_BUNDLE_IDENTIFIER = net.funkring.Fclipboard;
 				PRODUCT_NAME = Fclipboard;
 				PROVISIONING_PROFILE = "";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -552,6 +567,7 @@
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_THUMB_SUPPORT = NO;
 				GCC_VERSION = "";
