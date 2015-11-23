@@ -596,7 +596,7 @@ Ext.define('Ext.proxy.PouchDB', {
         var operationCount = records.length+1;
         
         Ext.each(operation.getRecords(), function(record) {           
-           db.remove(record.data, function(err,response) {
+           db.remove(record.raw, function(err,response) {
                 self.setException(operation, err);
                 
                 //check if finished

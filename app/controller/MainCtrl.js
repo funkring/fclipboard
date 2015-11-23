@@ -186,7 +186,6 @@ Ext.define('Fclipboard.controller.MainCtrl', {
                                     });
                                  }
                             };
-                            
                             if ( parentField ) {
                                 DBUtil.cascadeDelete(db, record.getId(), parentField, deleteCallback);
                             } else {
