@@ -163,19 +163,35 @@ Ext.define('Fclipboard.controller.MainCtrl', {
                {                    
                    var db = Config.getDB();
                    var deleteChecks = null;
+                   var parentField = null;
                    
                    try {
                         deleteChecks = record.getDeleteChecks();
                    } catch (err) {
                    }
                    
+                   try {
+                       parentField = record.getParentField();
+                   } catch (err) {                       
+                   }
+                   
                    var deleteFunc = function() {                   
                        db.get( record.getId() ).then( function(doc) { 
                             doc._deleted=true;
-                            db.put(doc).then( function() {
-                                mainView.fireEvent("deletedRecord", record);
-                                mainView.pop();
-                            });
+                            var deleteCallback = function(err, res) {
+                                 if (!err) {
+                                     db.put(doc).then( function() {                                        
+                                        mainView.fireEvent("deletedRecord", record);
+                                        mainView.pop();
+                                    });
+                                 }
+                            };
+                            
+                            if ( parentField ) {
+                                DBUtil.cascadeDelete(db, record.getId(), parentField, deleteCallback);
+                            } else {
+                                deleteCallback();
+                            }
                        });
                    };
                 

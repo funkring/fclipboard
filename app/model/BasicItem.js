@@ -9,12 +9,13 @@ Ext.define('Fclipboard.model.BasicItem', {
                 'section','code','sequence', 'required',
                 'product_id', 'pricelist_id', 'partner_id',
                 'valc','valt','valf','vali','valb','vald','group','rule_ids'],
-//       belongsTo: [{model:'Fclipboard.model.Partner', associationKey:'partner_id'}],
+//     belongsTo: [{model:'Fclipboard.model.Partner', associationKey:'partner_id'}],
        identifier: 'uuid',
+       parentField: 'parent_id',
        proxy: {
             type: 'pouchdb',
             database: 'fclipboard',
             resModel: 'fclipboard.item'
-       }       
+       }
    }
 });

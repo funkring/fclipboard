@@ -5,7 +5,8 @@ Ext.define('Fclipboard.model.ItemTemplate', {
        proxy: {
             type: 'pouchdb',
             database: 'fclipboard',
-            domain: [['template','=',true]]      
+            domain: [['template','=',true]],            
+            resModel: 'fclipboard.item'
        }       
    }
 });

@@ -1,4 +1,4 @@
-/*global Ext:false,PouchDB:false*,openerplib:false, console:false*/
+/*global Ext:false,PouchDB:false*,openerplib:false,console:false*/
 
 Ext.define('Ext.proxy.PouchDBUtil',{
     alternateClassName: 'DBUtil',
@@ -115,10 +115,12 @@ Ext.define('Ext.proxy.PouchDBUtil',{
         
         if (view !== null) {
             params.key = view.key;
-            db.query(view.name, params, function(err, res) {                
+            return db.query(view.name, params, function(err, res) {                
                 if ( !err ) {
                     // no error result was successfull
-                    callback(err, res);
+                    if (callback) {
+                        callback(err, res);
+                    }
                 } else {
                     //create view doc
                     var doc = {
@@ -131,7 +133,9 @@ Ext.define('Ext.proxy.PouchDBUtil',{
                     db.put(doc, function(err, res) {
                         if (err) {
                             // error on create index
-                            callback(err, null);
+                            if (callback) {
+                                callback(err, null);
+                            }
                         } else {
                             // query again
                             db.query(view.name, params, callback);
@@ -141,7 +145,7 @@ Ext.define('Ext.proxy.PouchDBUtil',{
                     
             });       
         } else {
-            db.allDocs(params, callback);
+           return db.allDocs(params, callback);
         } 
     },
     
@@ -230,6 +234,35 @@ Ext.define('Ext.proxy.PouchDBUtil',{
           });
           return JSON.parse(dumps);
           
+    },
+    
+    cascadeDelete: function(db, parent_uuid, parent_field, callback) {       
+        var self = this;
+        
+        var opCount=1;
+        var opCallback = function(err,res) {
+            if ( --opCount === 0) {
+                if (callback) {
+                    callback(err,res);
+                }
+            }
+        };
+        
+        var searchDelete = function(uuid) {
+            self.search(db, [[parent_field,"=",uuid]], {'include_docs':true}, function(err, res) {
+                 if (!err) {                    
+                    opCount += res.rows.length;
+                    Ext.each(res.rows, function(row) {
+                        db.remove(row.doc, {}, function(err, res) {
+                            searchDelete(row.doc._id);                            
+                        });                        
+                    });
+                 }
+                 opCallback(err,res);
+            });
+        }; 
+
+        searchDelete(parent_uuid);     
     },
     
     deepChildCopy: function(db, new_parent_uuid, template_uuid, parent_field, defaults, callback ) {
